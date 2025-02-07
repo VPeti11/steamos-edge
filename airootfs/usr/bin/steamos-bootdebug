@@ -1,0 +1,413 @@
+#!/bin/bash
+
+set -eu
+shopt -s extglob
+
+declare -r LOGFILE=steamcl-debug.log
+declare MODE=
+declare IMAGE=
+declare IARG=
+declare LOGARG=
+declare NEXT_BOOTPATH=
+declare THIS_BOOTPATH=
+declare DFLT_BOOTPATH=
+declare -a BOOT_PATHS=()
+declare -i HAVE_BOOTPATHS=0
+declare -r _IFS="$IFS"
+
+usage ()
+{
+    local -i code="${2:0}"
+    
+    if [ -n "${1:-}" ];
+    then
+        echo "Error: ${1}"
+        echo
+    fi
+    cat - <<EOF
+usage ${0##*/} <menu|verbose|quiet|status>
+      ${0##*/} log <enable|disable|show>
+      ${0##*/} <kernel-debug|kernel-debug-once|kernel-quiet> [image]
+
+Terms: chainloader - stage 1 bootloader
+       bootloader  - image specific stage 2 bootloader (grub)
+
+menu:    Turn on the chainloader boot menu.
+         You can trigger the grub menu from here.
+verbose: Chainloader logging to the console 
+quiet:   Turn off menu and verbose
+
+log enable:  Turn on chainloader logging to a file on the /esp filesystem
+log disable: Disable chainloader logging to filesystem
+log show:    Display contents of chainloader filesystem log
+
+kernel-debug:      kernel logging to console
+kernel-debug-once: kernel logging to console on next boot only
+kernel-quiet:      normal silent boot
+
+EOF
+
+    exit $code
+}
+
+init_bootloader_logfile ()
+{
+    local dir
+
+    for dir in "$@"
+    do
+        [ -d "${dir}" ] || continue
+        dd if=/dev/zero of="${dir}"/"${LOGFILE}" bs=4096 count=1 \
+           status=none > /dev/null
+    done
+}
+
+#############################################################################
+# If the user has set up some nonstandard boot locations(s) attempt to detect
+# that and set the correct flag files and debug paths:
+cache_bootpath ()
+{
+    local cache=${1:-}
+    local data=${2:-}
+    local dev_id uuid mount x
+    local _ifs="$IFS"
+    local path=
+    local mounted=
+
+    IFS="$_IFS"
+    case $payload in
+        (HD\(*|*/HD\(*)
+            dev_id=${data#*HD\(*,GPT,};
+            dev_id=${dev_id%%,*,*\)*};
+            dev_id=${dev_id,,};
+
+            # the automount means /esp and /efi might not be mounted
+            # so we have to poke them first:
+            ls -1 /esp /efi > /dev/null
+
+            while read -r uuid mount x;
+            do
+                if [ "$uuid" = "$dev_id" ];
+                then
+                    mounted=$mount
+                    break;
+                fi
+            done < <(lsblk -ro partuuid,mountpoint,label)
+            ;;
+    esac
+    IFS="$_ifs"
+
+    if [ -z "$mounted" ]; then return 0; fi
+    
+    case $data in
+        (*/File\(*)
+            path=${data##*/File\(};
+            path=${path%%\)*};
+            path=${path,,}
+            path=${path//\\/\/}
+            ;;
+        (*\)RC)
+            path="/efi/boot/bootx64.efi";
+            ;;
+    esac
+
+    if [ -n "$mounted" ] && [ -n "$path" ]
+    then
+        typeset -n cache
+        cache=${mounted}${path}
+        typeset +n cache
+    fi
+}
+
+detect_bootpaths ()
+{
+    local name label payload
+    local this_boot=
+    local next_boot=
+    local -a boot_order=
+
+    if [ ${HAVE_BOOTPATHS:-0} -eq 1 ]; then retuen 0; fi
+    HAVE_BOOTPATHS=1
+    
+    IFS="	"
+    while read -rs label payload
+    do
+        name="${label%%[:*]*}"
+        label="${label#*[:*] }"
+        case $name in
+            BootCurrent)
+                this_boot="$label"
+                ;;
+            BootNext)
+                next_boot="$label"
+                ;;
+            BootOrder)
+                read -ra boot_order < <(echo "$label" | sed -re 's/,/\t/g');
+                ;;
+            Boot[0-9][0-9][0-9][0-9])
+                [ "$name" = "Boot${this_boot:-}" ] &&
+                    cache_bootpath THIS_BOOTPATH "$payload"
+
+                [ "$name" = "Boot${next_boot:-}" ] &&
+                    cache_bootpath NEXT_BOOTPATH "$payload"
+
+                [ "$name" = "Boot${boot_order[0]:-}" ] &&
+                    cache_bootpath DFLT_BOOTPATH "$payload"
+                ;;
+        esac
+    done < <(efibootmgr)
+    IFS="$_IFS"
+}
+
+bootfile_list ()
+{
+    local x
+    
+    if [ ${#BOOT_PATHS[@]} -eq 0 ];
+    then
+        local -A paths=()
+        if [ -n "${NEXT_BOOTPATH:-}" ]; then paths[$NEXT_BOOTPATH]=1; fi
+        if [ -n "${DFLT_BOOTPATH:-}" ]; then paths[$DFLT_BOOTPATH]=1; fi
+        if [ -n "${THIS_BOOTPATH:-}" ]; then paths[$THIS_BOOTPATH]=1; fi
+        BOOT_PATHS=("${!paths[@]}")
+
+        if [ ${#BOOT_PATHS[@]} -eq 0 ]
+        then
+            BOOT_PATHS=(/esp/efi/boot/bootx64.efi /esp/efi/steamos/steamcl.efi)
+        fi
+    fi
+
+    for x in "${BOOT_PATHS[@]}"; do echo "$x"; done
+}
+
+flagfile ()
+{
+    local path="${1:-}"
+    local file="${2:-}"
+
+    echo "${path%/*}"/"$file"
+}
+
+#############################################################################
+
+show_status ()
+{
+    local flag state loader
+    local bootable img cur raw
+    local -i vflag
+    local -r fmt="%-37s %-15s %s\n"
+    
+    for loader in $(bootfile_list)
+    do
+        printf "Loader %s\n" "$loader"
+        flag=$(flagfile "$loader" steamcl-menu)
+        if [ -f "$flag" ]; then state=on; else state=off; fi
+        printf "$fmt" "'${flag}'" menu: "$state"
+
+        flag=$(flagfile "$loader" steamcl-verbose)
+        if [ -f "$flag" ]; then state=on; else state=off; fi
+        printf "$fmt" "'${flag}'" "log-to-console:" "$state"
+
+        flag=$(flagfile "$loader" "$LOGFILE")
+        if [ -f "$flag" ];
+        then
+            
+            state=$(stat -c %s "$flag")
+            state="on ($state Bytes)"
+        else
+            state=off;
+        fi
+        printf "$fmt\n" "'${flag}'" "debug-logfile:" "$state"
+    done
+
+    while read -r bootable img cur
+    do
+        read -r raw raw < <(steamos-bootconf config --image "$img" \
+                                            --get verbose 2>/dev/null)
+        vflag=${raw:-0}
+
+        if [ ${vflag:-0} -eq 0 ]
+        then
+            state=off
+        elif [ $vflag -eq 255 ]
+        then
+            state=next-boot-only
+        elif [ $vflag -gt 0 ]
+        then
+            state=on
+        else
+            state="unknown '${raw:-}'"
+        fi
+
+        echo "Image $img kernel-boot-log to console: $state"
+    done < <(steamos-bootconf list-images)
+
+    echo
+    [ -n "${NEXT_BOOTPATH:-}" ] && echo "Next boot: ${NEXT_BOOTPATH}" 
+    [ -n "${THIS_BOOTPATH:-}" ] && echo "This boot: ${THIS_BOOTPATH}"
+    [ -n "${DFLT_BOOTPATH:-}" ] && echo "Default  : ${DFLT_BOOTPATH}"
+}
+#############################################################################
+
+# The boot log is a circular log file of fixed size, so if we ran out of space
+# we'll have started overwriting the earliest entries - so sort the contents:
+display_log ()
+{
+    local path logfile text nth
+    local -a message=()
+
+    if [ -n "${THIS_BOOTPATH:-}" ]
+    then
+        path="${THIS_BOOTPATH}"
+    elif [ -n "${DFLT_BOOTPATH}" ]
+    then
+        path="${DFLT_BOOTPATH}"
+    fi
+
+    if [ -z "$path" ]
+    then
+        echo "Unable to locate current boot path" >&2
+        exit 2
+    fi
+
+    logfile=$(flagfile "$path" "$LOGFILE")
+
+    if [ ! -e "$logfile" ]
+    then
+        echo "Logfile '$logfile' not found" >&2
+        exit 2        
+    fi
+    
+    # when we wrap around in the logfile we can end up with a scrambled line
+    # since not all lines are the same length: discard incomplete lines
+    # (ie that have lost their XXX 3-digit marker):
+    while read -r nth text
+    do
+        case $nth in
+            [0-9][0-9][0-9])
+                nth=${nth##+(0)}
+                message[$nth]="$text"
+                ;;
+        esac
+    done < "$logfile"
+
+    for nth in "${!message[@]}"
+    do
+        printf "%03d %s\n" $nth "${message[$nth]:-…}"
+    done
+}
+
+#############################################################################
+check_permissions ()
+{
+    [ ${EUID:-$UID} -eq 0 ] ||
+        usage "Super-user privileges required - use sudo?" 1
+}
+
+process_args ()
+{
+    local status img current
+    local target_image=
+    local -a images=()
+
+    case ${1:--h} in
+        --help|-h|help)
+            usage "" 0
+            ;;
+        (menu|verbose|quiet|log|status|kernel-+(debug|debug-once|quiet))
+            check_permissions
+            MODE="${1}"
+            ;;&
+        kernel-debug|kernel-debug-once|kernel-quiet)
+            target_image=${2:-}
+            ;;
+        menu|quiet|status|verbose)
+            detect_bootpaths
+            ;;
+        log)
+            detect_bootpaths
+            LOGARG=${2:-show}
+            ;;
+        *)
+            usage "Unknown debug mode: '${1:-}'" 22
+            ;;
+    esac
+
+    if [ -n "${target_image:-}" ]
+    then
+        while read -r status img current
+        do
+            if [ "${img:-}" = "${target_image:-}" ]
+            then
+                IMAGE="${img}"
+                IARG="--image $IMAGE"
+                images+=("$img")
+                break
+            fi
+        done < <(steamos-bootconf list-images)
+
+        if [ -z "${IMAGE:-}" ]
+        then
+            usage "Unknown image '${2:-}' (${images[*]})" 22            
+        fi
+    fi
+
+    return 0
+}
+
+process_args "$@"
+
+case $MODE in
+    menu)
+        touch /esp/efi/{boot,steamos}/steamcl-menu
+        ;;
+    verbose)
+        touch /esp/efi/{boot,steamos}/steamcl-verbose
+        ;;
+    kernel-debug)
+        steamos-bootconf ${IARG:-} config --set verbose 1
+        ;;
+    kernel-debug-once)
+        steamos-bootconf ${IARG:-} config --set verbose 255
+        ;;
+    kernel-quiet)
+        steamos-bootconf ${IARG:-} config --set verbose 0
+        ;;
+    quiet)
+        for _x in $(bootfile_list)
+        do
+            for _f in steamcl-{menu,verbose}
+            do
+                _f=$(flagfile "$_x" "$_f")
+                rm -vf "$_f"
+            done
+        done
+        ;;
+    log)
+        case ${LOGARG:-on} in
+            on|enable)
+                for _x in $(bootfile_list)
+                do
+                    _x=$(dirname "$_x")
+                    init_bootloader_logfile "$_x"
+                done
+                ;;
+            off|disable)
+                for _x in $(bootfile_list)
+                do
+                    _x=$(flagfile "$_x" "$LOGFILE")
+                    rm -f "$_x"
+                done
+                ;;
+            show)
+                display_log
+                ;;
+            *)
+                usage "Unknown command '$*'" 22
+                ;;
+        esac
+        ;;
+    status)
+        show_status
+        ;;    
+esac

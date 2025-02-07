@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-2.0+
+
+# Copyright © 2022 Collabora Ltd
+# Copyright © 2022 Valve Corporation
+
+echo -e "Content-Type: text/plain\r\n"
+echo -e "\r\n"
+
+echo "'$0' running as $(whoami) in $(pwd)"
+echo "==================================================================="
+for x in "$@";
+do
+    case $x in
+        *=*)
+            key="${x%%=*}"
+            val="${x#*=}"
+            ;;
+        *)
+            key="$x"
+            val="$x"
+            ;;
+    esac
+            echo "$key := '$val'"
+done
+echo "==================================================================="
+env

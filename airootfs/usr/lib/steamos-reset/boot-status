@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-2.0+
+
+# Copyright © 2022 Collabora Ltd
+# Copyright © 2022 Valve Corporation
+
+LIBDIR=$(dirname "$0")
+
+set -eu
+. ${LIBDIR:-.}/steamos-reset.sh
+shopt -s extglob
+set +e
+
+reset_fs_list ()
+{
+    local cfg
+    local type instance dev opts name image
+
+    for cfg in $FACTORY_RESET_CONFIG_DIR/*.cfg
+    do
+        [ -r $cfg ] || continue
+        while read type instance dev opts
+        do
+            name="${instance##*/}"
+            image="${name##*-}"
+            case $type in
+                EFI)  echo "$dev Bootloader ($image)"; ;;
+                VAR)  echo "$dev OS-data ($image)"   ; ;;
+                HOME) echo "$dev User-data (shared)" ; ;;
+                *)    echo "$dev $instance ($name)"  ; ;;
+            esac
+        done < $cfg
+    done
+}
+
+emit_boot_status ()
+{
+    local -i reset=0
+    local -r service=$(quote_escape $(basename "$0"))
+    local -r current=$(steamos-bootconf this-image)
+    local -r selected=$(steamos-bootconf selected-image)
+
+    emit_json_header
+    cat - <<EOF
+{"service": "$service",
+ "version": "$VERSION",
+ "status": 200,
+ "message": "Boot Status",
+ "boot":
+    {"current": "$current",
+     "next": "$selected", 
+     "reset-list": [
+EOF
+    while read fs label
+    do
+        if [ $reset -gt 0 ]; then echo ","; fi
+        echo -n " {\"device\":\"$fs\",\"label\":\"$label\"}"
+        reset=1
+    done < <(reset_fs_list)
+    echo " ]}}"
+}
+
+emit_boot_status
+
+exit 0

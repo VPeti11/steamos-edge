@@ -1,0 +1,103 @@
+#!/bin/bash
+# -*- mode: sh; indent-tabs-mode: nil; sh-basic-offset: 4; -*-
+# vim: et sts=4 sw=4
+
+#  SPDX-License-Identifier: LGPL-2.1+
+#
+#  Copyright © 2022 Joshua Ashton for Valve Corporation.
+#
+#  This file is part of steamos-customizations.
+#
+#  steamos-customizations is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License as
+#  published by the Free Software Foundation; either version 2.1 of the License,
+#  or (at your option) any later version.
+
+set -euo pipefail
+
+# a file that gets removed when the image changes
+# that we can touch to see if this script
+# has previously been run on this install.
+touch_file=/usr/share/steamos/devmode-enabled
+
+print_warning() {
+    echo -e "\033[1;35mSteamOS \033[0;35mDeveloper Mode\033[0m\n"
+    echo -e "\033[0;31m\033[1mNOTE:\033[0m\033[0;33m You (probably) don't want to run this script!\033[0m"
+    echo -e "\e[3mThere is most likely a much better way to do what you want to do:\033[0m\033[0;36m"
+    echo -e "- Have you considered packaging your app with Flatpak? This is a much better (and safer) experience for users."
+    echo -e "- Have you considered building your package in the SteamOS docker image with 'toolbox'? (This works on desktop too!)\033[0m\n"
+}
+
+usage() {
+    cat <<EOF
+Usage: ${0##*/} enable|status
+EOF
+
+    print_warning
+
+    cat <<EOF
+A small helper script to enable developer mode on SteamOS.
+It does the following:
+  - Disables read-only mode.
+  - Populates the pacman keyring.
+  - Restores missing files stripped from the shipping image of SteamOS (ie. headers, etc) so you can build your own software.
+
+If you wish to re-enable readonly mode after using this script, you can use the "steamos-readonly disable" command.
+
+If status reports "enabled", you can still run "enable" again to restore packages if you mess up. ;)
+EOF
+}
+
+enable_devmode() {
+    # ask nicely and give some guidance
+    print_warning
+    while true; do
+        read -p "Are you sure you wish to enable developer mode? [y/N] " yn
+        case $yn in
+            [Yy]* ) break;;
+            * ) exit 1;
+        esac
+    done
+
+    # don't bother running steamos-readonly disable again.
+    # if it's already writeable, produces concerning spew.
+    if steamos-readonly status >/dev/null 2>&1; then
+        steamos-readonly disable
+    fi
+    rm -rf /etc/pacman.d/gnupg/ || :
+    pacman-key --init
+    pacman-key --populate
+    pacman -Sy --noconfirm --needed archlinux-keyring
+    pacman --noconfirm -S $(pacman -Qnkq | cut -d' ' -f1 | sort | uniq)
+    pacman -S base-devel multilib-devel --needed
+    touch "$touch_file"
+}
+
+# returns if 'dev mode' is enabled,
+# ie. we are writeable and we know
+# we have restored the packages on this install
+status() {
+    if ! steamos-readonly status >/dev/null 2>&1 && [[ -f "$touch_file" ]]; then
+        echo "enabled"
+    else
+        echo "disabled"
+        return 1
+    fi
+}
+
+if [[ "$(id -u)" -ne 0 ]]; then
+    echo "$(basename $0) needs to be run as root"
+    exit 1
+fi
+
+case "${1:-}" in
+    enable)
+        enable_devmode
+        ;;
+    status)
+        status
+        ;;
+    *)
+        usage
+        exit 1
+esac

@@ -1,0 +1,36 @@
+[Unit]
+Description=Manage swap spaces on zram, files and partitions.
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=/usr/bin/systemd-swap start
+ExecStop=/usr/bin/systemd-swap stop
+RemainAfterExit=true
+TimeoutStopSec=600
+OOMScoreAdjust=-1000
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=20
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SYS_MODULE
+DeviceAllow=block-blkext r
+DeviceAllow=block-device-mapper r
+DeviceAllow=block-loop rw
+DeviceAllow=block-sd r
+DeviceAllow=block-virtblk rw
+DeviceAllow=block-zram rw
+NoNewPrivileges=true
+PrivateNetwork=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=read-only
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectSystem=full
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=@system-service @swap @module
+
+[Install]
+WantedBy=multi-user.target

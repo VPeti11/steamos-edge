@@ -1,0 +1,14 @@
+#  SPDX-License-Identifier: BSD-2-Clause
+#
+#  Copyright (c) 2022 Valve Software
+#  Author: Vicki Pfau <vi@endrift.com>
+
+[Unit]
+Description=DualShock 4/DualSense mouse inhibitor
+
+[Service]
+User=root
+ExecStart=/usr/bin/ds-inhibit
+
+[Install]
+WantedBy=multi-user.target

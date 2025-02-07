@@ -1,0 +1,17 @@
+#  SPDX-License-Identifier: LGPL-2.1-or-later
+#
+#  Copyright (c) 2022 Valve Software
+#  Author: Vicki Pfau <vi@endrift.com>
+
+[Unit]
+Description=SteamOS Offload - /var/lib/steamos-log-submitter
+
+[Mount]
+What=/home/.steamos/offload/var/lib/steamos-log-submitter
+Where=/var/lib/steamos-log-submitter
+Type=none
+Options=bind
+
+[Install]
+WantedBy=steamos-offload.target
+RequiredBy=steamos-log-submitter.service

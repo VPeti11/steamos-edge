@@ -1,0 +1,142 @@
+#!/bin/bash
+# -*- mode: sh; indent-tabs-mode: nil; sh-basic-offset: 4; -*-
+# vim: et sts=4 sw=4
+
+#  SPDX-License-Identifier: LGPL-2.1+
+#
+#  Copyright © 2019 Collabora Ltd.
+#  Copyright © 2019 Valve Corporation.
+#
+#  This file is part of steamos-customizations.
+#
+#  steamos-customizations is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License as
+#  published by the Free Software Foundation; either version 2.1 of the License,
+#  or (at your option) any later version.
+
+set -e
+set -u
+
+# Helpers
+
+fail() { echo >&2 "$@"; exit 1; }
+warn() { echo >&2 "$@"; }
+
+usage() {
+    local status=${1-2}
+
+    if [ $status -ne 0 ]; then
+        exec >&2
+    fi
+
+    echo
+    echo "Usage: $(basename $0)"
+    echo
+    echo "Generate the GRUB early config for SteamOS. The purpose of this early config"
+    echo "is to find the *real* GRUB config, as it's stored in a non-standard location."
+    echo
+    echo "The content of this early config embeds the UUIDs of the root and the var"
+    echo "filesystems, so it's tied to the current OS. If you want to generate a"
+    echo "config for another set of SteamOS partitions, make sure to use a chroot."
+    echo
+    echo "This early config is meant to be embedded in a memdisk, and additionally you"
+    echo "must instruct GRUB lo load this memdisk using an even *earlier* config (the"
+    echo "so-called bootstrap config), that you pass to grub-mkimage through --config=."
+    echo
+    echo "If the environment \$STEAMOS_DEBUG is set, the early config that is generated"
+    echo "produces additional outputs and a delay."
+    echo
+
+    exit $status
+}
+
+# Arguments
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage 0
+            ;;
+        *)
+            usage 1
+            ;;
+    esac
+done
+
+# Get UUIDs for root and var (optional) partitions
+ROOTUUID=$(findmnt -no uuid /)
+VARUUID=$(findmnt -no uuid /var || true)
+
+[ "$ROOTUUID" ] || fail "Failed to get root fs uuid"
+[ "$VARUUID"  ] || warn "Failed to get var fs uuid"
+
+# Generate the grub early config
+
+if [ -n "${STEAMOS_DEBUG:-}" ]; then
+    cat << EOF
+echo "---- Entering early config ----"
+echo "cmdpath: \$cmdpath"
+echo "root   : \$root"
+echo "prefix : \$prefix"
+echo "-------------------------------"
+EOF
+fi
+
+if [ "${prefix:-}" ]; then
+    cat << EOF
+set prefix=$prefix
+EOF
+fi
+
+##
+## JUPITER: /var/boot support is currently disabled, and there's a bug with it here, so drop /var from the search path
+##  https://gitlab.steamos.cloud/jupiter/tasks/-/issues/329
+##
+
+cat << EOF
+set cfg=
+for uuid in $ROOTUUID; do
+    search --fs-uuid --no-floppy --set=altroot \$uuid
+    if [ -d (\$altroot)/boot/grub ]; then
+        set root=\$altroot
+        set prefix=(\$altroot)/boot/grub
+        if [ -e \$prefix/grub.cfg ]; then
+            set cfg=\$prefix/grub.cfg
+        fi
+        break
+    fi
+done
+unset altroot
+EOF
+
+cat << EOF
+
+if [ -e "\$cmdpath/grub.cfg" ]; then
+
+    ${STEMOS_DEBUG+:echo "efi partition selected to boot"}
+    set cfg=\$cmdpath/grub.cfg
+
+else
+
+    echo "falling back to grub's usual default (unexpected)"
+    set cfg=\$prefix/grub.cfg
+
+fi
+EOF
+
+if [ -n "${STEAMOS_DEBUG:-}" ]; then
+    cat << EOF
+echo "---- Leaving early config ----"
+echo "root   : \$root"
+echo "prefix : \$prefix"
+echo "cfg    : \$cfg"
+echo "------------------------------"
+
+echo -n "Hit any key to continue... "
+read _
+EOF
+fi
+
+cat << EOF
+configfile \$cfg
+EOF

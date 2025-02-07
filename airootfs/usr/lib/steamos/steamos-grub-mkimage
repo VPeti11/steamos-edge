@@ -1,0 +1,183 @@
+#!/bin/bash
+# -*- mode: sh; indent-tabs-mode: nil; sh-basic-offset: 4; -*-
+# vim: et sts=4 sw=4
+
+#  SPDX-License-Identifier: LGPL-2.1+
+#
+#  Copyright © 2019-2020 Collabora Ltd.
+#  Copyright © 2019-2020 Valve Corporation.
+#
+#  This file is part of steamos-customizations.
+#
+#  steamos-customizations is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License as
+#  published by the Free Software Foundation; either version 2.1 of the License,
+#  or (at your option) any later version.
+
+set -e
+set -u
+
+FORMAT= # --format=
+OUTPUT= # --output=
+
+DEFAULT_FORMAT=x86_64-efi
+DEFAULT_OUTPUT=/efi/EFI/steamos/grubx64.efi
+
+# Helpers
+
+fail() { echo >&2 "$@"; exit 1; }
+
+usage() {
+    local status=${1-2}
+
+    if [ $status -ne 0 ]; then
+        exec >&2
+    fi
+
+    echo
+    echo "Usage: $(basename $0) OPTIONS"
+    echo
+    echo "Generate a GRUB image suitable for SteamOS, and install it to $DEFAULT_OUTPUT."
+    echo
+    echo "For SteamOS purpose, this script should be run without any arguments,"
+    echo "and it will do the right things (TM)."
+    echo
+    echo "This script also supports a subset of grub-mkimage arguments, so that it"
+    echo "can be called by grub-install. If you're not grub-install, you shouldn't"
+    echo "need to provide any argument."
+    echo
+    echo "The content of this image embeds the UUIDs of the root and the var"
+    echo "filesystems, so it's tied to the current OS. If you want to generate a"
+    echo "config for another set of SteamOS partitions, make sure to use a chroot."
+    echo
+
+    exit $status
+}
+
+# Arguments
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage 0
+            ;;
+        -O|--format|-O=*|--format=*)
+            case "$1" in
+                -O|--format)
+                    shift
+                    FORMAT=$1
+                    ;;
+                *)
+                    FORMAT=${1#*=}
+                    ;;
+            esac
+            [ "${FORMAT:-}" ] || usage 1
+            shift
+            ;;
+        -o|--output|-o=*|--output=*)
+            case "$1" in
+                -o|--output)
+                    shift
+                    OUTPUT=$1
+                    ;;
+                *)
+                    OUTPUT=${1#*=}
+                    ;;
+            esac
+            [ "${OUTPUT:-}" ] || usage 1
+            shift
+            ;;
+        -p|--prefix|-p=*|--prefix=*)
+            case "$1" in
+                -p|--prefix)
+                    shift
+                    PREFIX=$1
+                    ;;
+                *)
+                    PREFIX=${1#*=}
+                    ;;
+            esac
+            # prefix can be null
+            #[ "${1:-}" ] || usage 1
+            PREFIX=$1
+            shift
+            ;;
+        *)
+            echo "$0: unrecognized option '$1'" >&2
+            usage 1
+            ;;
+    esac
+done
+
+if [ -z "$FORMAT" ] && [ -z "$OUTPUT" ]; then
+    [ "$(uname -m)" = "x86_64" ] || \
+        fail "Unsupported architecture, we expect x86_64"
+    FORMAT=$DEFAULT_FORMAT
+    OUTPUT=$DEFAULT_OUTPUT
+fi
+
+[ "$FORMAT" ] || fail "No format provided, no default either"
+[ "$OUTPUT" ] || fail "No output provided, no default either"
+
+# Work in a temporary directory
+
+WORKDIR=$(mktemp -d)
+trap "rm -fr $WORKDIR" EXIT
+cd $WORKDIR
+
+# Create the early config, pack it in a memdisk
+
+MEMDISK=grub-memdisk.tar
+MODULES=(search search_fs_uuid ext2 btrfs fat part_gpt configfile test echo sleep)
+
+prefix=${PREFIX:-} \
+/usr/lib/steamos/steamos-grub-mkearlyconfig > grub.cfg
+if [ "${STEAMOS_DEBUG:-}" ]; then
+    MODULES+=(read)
+    cat - grub.cfg << EOF >&2
+
+Using early grub.cfg
+
+EOF
+fi
+tar -cf - grub.cfg > $MEMDISK
+
+# Create the bootstrap config
+
+BOOTSTRAP_CONFIG=grub-bootstrap.cfg
+MODULES+=(normal memdisk tar)
+
+echo 'normal (memdisk)/grub.cfg' > $BOOTSTRAP_CONFIG
+if [ "${STEAMOS_DEBUG:-}" ]; then
+    cat - $BOOTSTRAP_CONFIG << EOF >&2
+
+Using bootstrap grub.cfg
+
+EOF
+fi
+
+# Create the grub image
+
+mkdir -p "$(dirname $OUTPUT)"
+
+if [ "${STEAMOS_DEBUG:-}" ]; then
+    cat << EOF >&2
+
+Creating image using command
+
+grub-mkimage --config="$BOOTSTRAP_CONFIG"
+             --memdisk="$MEMDISK"
+             --format="$FORMAT"
+             --output="$OUTPUT"
+             ${MODULES[*]}
+             $*
+EOF
+fi
+
+/usr/lib/grub/grub-mkimage \
+  --config="$BOOTSTRAP_CONFIG" \
+  --memdisk="$MEMDISK" \
+  --format="$FORMAT" \
+  --output="$OUTPUT" \
+  "${MODULES[@]}" \
+  "$@"

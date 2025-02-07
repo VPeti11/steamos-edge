@@ -1,0 +1,82 @@
+#!/bin/bash
+# -*- mode: sh; indent-tabs-mode: nil; sh-basic-offset: 4; -*-
+# vim: et sts=4 sw=4
+
+#  SPDX-License-Identifier: LGPL-2.1+
+#
+#  Copyright © 2019-2021 Collabora Ltd.
+#  Copyright © 2019-2021 Valve Corporation.
+#
+#  This file is part of steamos-customizations.
+#
+#  steamos-customizations is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License as
+#  published by the Free Software Foundation; either version 2.1 of the License,
+#  or (at your option) any later version.
+
+set -euo pipefail
+
+FORCE=0 # --force
+
+usage() {
+    local status=${1-2}
+
+    if [ $status -ne 0 ]; then
+        exec >&2
+    fi
+
+    echo
+    echo "Usage: $(basename $0) [OPTIONS]"
+    echo
+    echo "Factory reset of SteamOS, wipe out the data partitions."
+    echo
+    echo "This script records the partitions to be reset."
+    echo "On reboot the initrd scrubs them and does a first-boot setup."
+    echo
+
+    exit $status
+}
+
+ask() {
+    local message="$1 [y/n] "
+    local answer=
+
+    while read -r -t 0; do
+        read -n 256 -r -s
+    done
+
+    while true; do
+        read -p "$message" answer
+        case "$answer" in
+            [Yy]|YES|Yes|yes) return 0;;
+            [Nn]|NO|No|no)    return 1;;
+            *) echo "Please answer yes or no.";;
+        esac
+    done
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage 0
+            ;;
+        *)
+            usage 1
+            ;;
+    esac
+done
+
+echo
+echo "You're about to perform a factory reset of your SteamOS install!"
+echo
+echo "The data partitions will be erased, all your personal data will be lost."
+echo "Then the system will reboot, and you'll be back to a pristine SteamOS install."
+echo
+if ! ask "Do you want to continue?"; then
+    echo "Alright buddy. Come back when you feel ready."
+    exit 0
+fi
+
+if steamos-factory-reset-config; then
+    reboot
+fi

@@ -1,0 +1,19 @@
+[Desktop Entry]
+Comment[en_US]=
+Comment=
+Exec=/home/deck/tools/repair_reimage.sh
+GenericName[en_US]=Reimage Steam Deck
+GenericName=
+Icon=run-install
+MimeType=
+Name[en_US]=Reimage Steam Deck
+Name=Reimage Steam Deck
+Path=/home/deck
+StartupNotify=true
+Terminal=true
+TerminalOptions=
+Type=Application
+X-DBUS-ServiceName=
+X-DBUS-StartupType=
+X-KDE-SubstituteUID=false
+X-KDE-Username=

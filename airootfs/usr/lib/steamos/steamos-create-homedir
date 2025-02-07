@@ -1,0 +1,56 @@
+#!/bin/bash
+# -*- mode: sh; indent-tabs-mode: nil; sh-basic-offset: 4; -*-
+# vim: et sts=4 sw=4
+
+#  SPDX-License-Identifier: MPL-2.0
+#
+#  Copyright © 2015-2021 Collabora Ltd.
+#  Copyright © 2019-2021 Valve Corporation.
+#
+#  This file is part of steamos-customizations.
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# NOTE: this script is essentially open-coding the mkhomedir_helper utility
+# with additional cp/install on top. The latter are workarounds for the bad
+# separation that we currently have - for example:
+# - kupdate-notifier is provided by one package, its config in another.
+
+set -euo pipefail
+
+if [[ "$#" -eq 0 ]]
+then
+    cat <<EOF
+Usage: ${0##*/} UID
+EOF
+    echo "Too few argument" >&2
+    exit 1
+fi
+
+IFS=: read -r user _ uid gid _ homedir _ < <(getent passwd "$1")
+if [[ ! "${homedir:-}" ]]
+then
+    echo "$1: No such USER" >&2
+    exit 1
+fi
+
+if [[ -d "${homedir:-}" ]]
+then
+    exit 0
+fi
+
+echo "Creating homedir $homedir for UID $uid"
+install -d -m 700 "$homedir"
+find /etc/skel -maxdepth 1 -mindepth 1 -exec cp -vPax {} "$homedir" \;
+cp -vPax /usr/share/pixmaps/steamos.png "$homedir/.face.icon"
+install -d -m755 "$homedir/Desktop"
+for i in /usr/share/applications/steam.desktop /usr/share/applications/steamos-install{,-devel}.desktop
+do
+    [ -e "$i" ] || continue
+    ln -sf "$i" "$homedir/Desktop/${i##*/}"
+done
+mkdir -p "$homedir/.config/systemd/user/default.target.wants"
+ln -sf /usr/lib/systemd/user/gamemoded.service "$homedir/.config/systemd/user/default.target.wants/gamemoded.service"
+chown -R "$uid:$gid" "$homedir"

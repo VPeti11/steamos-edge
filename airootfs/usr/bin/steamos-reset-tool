@@ -1,0 +1,212 @@
+#!/bin/bash
+
+set -eu
+
+# SPDX-License-Identifier: GPL-2.0+
+
+# Copyright © 2022 Collabora Ltd
+# Copyright © 2022 Valve Corporation
+
+declare -r EXECDIR=/usr/share/steamos-reset/cgi
+declare LAST_MESSAGE=
+declare LAST_STATUS=
+declare LAST_UUID=
+
+wait_for_session ()
+{
+    local uuid=$1
+    local status=0
+    local spin=1
+    local log_idx=0
+    local JSON
+
+    while [ $spin -eq 1 ]
+    do
+        if [ $status -ge 200 ]
+        then
+            LAST_UUID="$uuid"
+            spin=0
+        elif [ $status -eq 0 ] || [ $status -eq 102 ]
+        then
+            JSON=$(${EXECDIR}/status uuid="$uuid" start=$log_idx)
+            status=$(echo "$JSON" | jq -rc ".status_list[\"$uuid\"][0]")
+            while read msg
+            do
+                echo "$msg" >&2
+                log_idx=$((log_idx + 1))
+                LAST_MESSAGE="$msg"
+            done < <(echo "$JSON" | jq -rc ".log_messages[]")
+        fi
+    done
+
+    LAST_STATUS="$status"
+
+    if [ $status -eq 200 ]
+    then
+        return 0
+    else
+        return 1
+    fi
+}
+
+session_status ()
+{
+    local uuid=${1:-}
+    local JSON
+    local service status msg
+
+    if [ -z "$uuid" ] || [ "$uuid" = null ]
+    then
+        return 1
+    fi
+
+    JSON=$(${EXECDIR}/status uuid="$uuid")
+    read status  < <(echo "$JSON" | jq -rc ".status_list[\"$uuid\"][0]")
+    read service < <(echo "$JSON" | jq -rc ".status_list[\"$uuid\"][1]")
+    read msg     < <(echo "$JSON" | jq -rc ".log_messages[-1]")
+   msg=${msg//\"/\\\"}
+   cat - <<EOF | jq
+{"service": "$service",
+ "uuid": "$uuid",
+ "status": $status,
+ "message": "$msg" }
+EOF
+}
+
+execute_backend ()
+{
+    local -r backend=$1; shift
+    local -r JSON=$(${EXECDIR}/$backend "$@")
+    local -i rv=0
+
+    LAST_MESSAGE=
+    LAST_STATUS=
+    LAST_UUID=
+
+    local service uuid status message
+
+    read status service uuid < \
+         <(echo "$JSON" | jq -rc '"\(.status) \(.service) \(.uuid)"')
+
+    if [ -n "$uuid" ] && [ "$uuid" != "null" ]
+    then
+        if ! wait_for_session "$uuid";
+        then
+            rv=1
+        fi
+
+        # os-status and factory reset have specific output
+        # formats when finished, other long running sessions
+        # get a generic response:
+        case $backend in
+            os-status)     ${EXECDIR}/os-status uuid="$uuid" | jq; ;;
+            factory-reset) ${EXECDIR}/boot-status | jq; ;;
+            *) session_status "$uuid"; ;;
+        esac
+
+        return $rv;            
+    else
+        LAST_STATUS=$status
+        echo "$JSON" | jq
+        if [ $status -ne 200 ]; then return 1; fi
+        return 0
+    fi
+}
+
+get_cached_os_status_uuid ()
+{
+    local id x
+    # check for a cached successful result
+    read id x < <(${EXECDIR}/status | \
+                  jq -rc '.status_list|to_entries[]|select(.value[0]==200 and .value[1]=="os-status")|.key')
+
+    echo "$id"
+}
+
+get_cache_os_status ()
+{
+    local uuid=$(get_cached_os_status_uuid)
+    
+    if [ -z "$uuid" ] || [ "$uuid" = null ]
+    then
+        execute_backend os-status
+    else
+        ${EXECDIR}/os-status uuid="$uuid" | jq
+    fi
+}
+
+completed_sessions ()
+{
+    ${EXECDIR}/status | \
+        jq -cr '.status_list|to_entries[]|select(.value[0]!=102 or .value[3]==0)|.key'
+}
+
+delete_completed_sessions ()
+{
+    local uuid x
+    local n=0
+    while read uuid x
+    do
+        if [ $n -gt 0 ]
+        then
+            echo -n ","
+        else
+            n=1
+        fi
+        ${EXECDIR}/clear uuid="$uuid"
+    done < <(completed_sessions)
+}
+
+factory_reset ()
+{
+    local arg uuid=
+
+    for arg in "$@"
+    do
+        case $arg in
+            scanuuid=*) uuid="${arg#scanuuid=}"; break; ;;
+        esac
+    done
+
+    # no session UUID from user, find a cached one
+    if [ -z "$uuid" ] || [ "$uuid" = null ]
+    then
+        uuid=$(get_cached_os_status_uuid)        
+    fi
+
+    # nothing passed in, nothing cached: error
+    if [ -z "$uuid" ] || [ "$uuid" = null ]
+    then
+        cat - <<EOF
+{"status": 404,
+ "message": "No factory reset settings found, run $0 os-status"}
+EOF
+        exit 1
+    fi
+
+    execute_backend factory-reset scanuuid="$uuid"
+}
+
+declare -r verb=${1:-boot-status}; shift || true
+
+case $verb in
+    debug|status)
+        ${EXECDIR}/$verb "$@" | jq
+        ;;
+    cleanup)
+        (echo "["; delete_completed_sessions; echo "]") | jq
+        ;;
+    os-status)
+        get_cache_os_status
+        ;;
+    boot-status|undo-reset)
+        execute_backend $verb "$@"
+        ;;
+    factory-reset)
+        factory_reset "$@"
+        ;;
+    *)
+        echo "$0: Unrecognised action \"$verb\""
+        exit 1
+        ;;
+esac

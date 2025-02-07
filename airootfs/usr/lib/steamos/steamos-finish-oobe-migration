@@ -1,0 +1,83 @@
+#!/bin/bash
+# -*- mode: sh; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
+# vim: et sts=2 sw=2
+
+#  SPDX-License-Identifier: LGPL-2.1+
+#
+#  Copyright © 2022 Valve Corporation.
+#
+#  This file is part of steamos-customizations.
+#
+#  steamos-customizations is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License as
+#  published by the Free Software Foundation; either version 2.1 of the License,
+#  or (at your option) any later version.
+
+##
+## This migrates all data in /home/doorstop to the current username, e.g. /home/deck,
+## with a few cleanups
+##
+
+# The original OOBE username, should match what the service file is keyed on.
+MIGRATE_USERNAME=doorstop
+# The user id that user's data is migrated to
+MIGRATE_USERID=1000
+
+old_home=/home/$MIGRATE_USERNAME
+new_username=$(id -nu $MIGRATE_USERID)
+new_home=/home/$new_username
+
+info() { logger -p daemon.info "$*"; }
+warn() { logger -p daemon.warning "$*"; }
+die() { logger -p daemon.error "$*"; exit 1; }
+on_err() { die "Failed to migrate OOBE user data, some stale data may exist in '$old_home'"; }
+trap on_err ERR
+
+# Shouldn't have been invoked if $old_home isn't here or is a symlink.
+[[ -d $old_home && ! -L $old_home ]] || die "'$old_home' does not exist or is not a folder, nothing to migrate"
+
+# We only want to do opinionated things to $old_home if it is owned by $MIGRATE_USERID, but $MIGRATE_USERID is no longer
+# named $MIGRATE_USERNAME.  Otherwise we'd delete random things if you renamed your user doorstop, or made a new user
+# named doorstop.
+# Unfortunately there's not a clear OOBE-sentinel we've left behind that's cleaner to check.
+if [[ $(stat --format="%u:%g" "$old_home") != $MIGRATE_USERID:$MIGRATE_USERID ]]; then
+  info "$old_home exists, but is not owned by user $MIGRATE_USERID, not touching"
+  exit 0
+fi
+
+if [[ $new_username = "$MIGRATE_USERNAME" ]]; then
+  info "$old_home exists, but user $MIGRATE_USERID is still named $MIGRATE_USERNAME, so no migration desired"
+  exit 0
+fi
+
+
+## Do the migration
+
+# Case 1: $new_home already exists
+#   If we've already migrated and made a home directory, then repeated the OOBE, we'd prefer to just drop old OOBE data
+#   than risk blowing away actual accumulated userdata.
+if [[ -e $new_home ]]; then
+  warn "New home directory $new_home already exists, dropping repeat OOBE data from $old_home"
+  rm -rf "$old_home"
+  exit 0
+fi
+
+# Case 2:
+#   Fixup old data and move to new home folder. Note that these steps are idempotent, in case the migration is interrupted.
+
+# First, we want to re-acquire anything in /etc/skel, rather than the skeleton that was copied in OOBE
+cp -rv /etc/skel/. "$old_home"/
+
+# The OOBE dropped a debug shortcut on the default desktop that shouldn't be there.
+rm -rf "${old_home}/Desktop/RTST Validation.desktop"
+
+# Do this as the final step such that interruptions just retry.
+sync
+mv -v "$old_home" "$new_home"
+
+# Create an old->new symlink.  This is a fallback for cases where the old home directory is still referenced, but
+# shouldn't really be in use.  This part is less-indempotent.
+ln -sv ./"$new_username" "$old_home"
+sync
+
+info "Successfully migrated $old_home -> $new_home"
