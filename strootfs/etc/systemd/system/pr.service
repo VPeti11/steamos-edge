@@ -1,0 +1,11 @@
+[Unit]
+Description=prsist # fuck yeah
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "mount /dev/sda2 /mnt && mount --bind /mnt /mnt/overlay"
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
