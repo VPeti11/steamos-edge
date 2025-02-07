@@ -39,8 +39,8 @@ search_filename=""
 declare -i rm_work_dir=0
 buildmodes=()
 bootmodes=()
-airootfs_image_type=""
-airootfs_image_tool_options=()
+strootfs_image_type=""
+strootfs_image_tool_options=()
 bootstrap_tarball_compression=""
 cert_list=()
 declare -A file_permissions=()
@@ -147,7 +147,7 @@ _show_config() {
     _msg_info "                 Packages:   ${buildmode_pkg_list[*]}"
 }
 
-# Cleanup airootfs
+# Cleanup strootfs
 _cleanup_pacstrap_dir() {
     _msg_info "Cleaning up in pacstrap location..."
 
@@ -176,15 +176,15 @@ _cleanup_pacstrap_dir() {
 # Create a squashfs image and place it in the ISO 9660 file system.
 # $@: options to pass to mksquashfs
 _run_mksquashfs() {
-    local mksquashfs_options=() image_path="${isofs_dir}/${install_dir}/${arch}/airootfs.sfs"
+    local mksquashfs_options=() image_path="${isofs_dir}/${install_dir}/${arch}/strootfs.sfs"
     rm -f -- "${image_path}"
     [[ ! "${quiet}" == "y" ]] || mksquashfs_options+=('-no-progress' '-quiet')
-    mksquashfs "$@" "${image_path}" -noappend "${airootfs_image_tool_options[@]}" "${mksquashfs_options[@]}"
+    mksquashfs "$@" "${image_path}" -noappend "${strootfs_image_tool_options[@]}" "${mksquashfs_options[@]}"
 }
 
 # Create an ext4 image containing the root file system and pack it inside a squashfs image.
 # Save the squashfs image on the ISO 9660 file system.
-_mkairootfs_ext4+squashfs() {
+_mkstrootfs_ext4+squashfs() {
     local ext4_hash_seed mkfs_ext4_options=()
     [[ -e "${pacstrap_dir}" ]] || _msg_error "The path '${pacstrap_dir}' does not exist" 1
 
@@ -213,7 +213,7 @@ _mkairootfs_ext4+squashfs() {
 }
 
 # Create a squashfs image containing the root file system and saves it on the ISO 9660 file system.
-_mkairootfs_squashfs() {
+_mkstrootfs_squashfs() {
     [[ -e "${pacstrap_dir}" ]] || _msg_error "The path '${pacstrap_dir}' does not exist" 1
 
     install -d -m 0755 -- "${isofs_dir}/${install_dir}/${arch}"
@@ -222,15 +222,15 @@ _mkairootfs_squashfs() {
 }
 
 # Create an EROFS image containing the root file system and saves it on the ISO 9660 file system.
-_mkairootfs_erofs() {
+_mkstrootfs_erofs() {
     local mkfs_erofs_options=()
     [[ -e "${pacstrap_dir}" ]] || _msg_error "The path '${pacstrap_dir}' does not exist" 1
 
     install -d -m 0755 -- "${isofs_dir}/${install_dir}/${arch}"
-    local image_path="${isofs_dir}/${install_dir}/${arch}/airootfs.erofs"
+    local image_path="${isofs_dir}/${install_dir}/${arch}/strootfs.erofs"
     rm -f -- "${image_path}"
     [[ ! "${quiet}" == "y" ]] || mkfs_erofs_options+=('--quiet')
-    mkfs_erofs_options+=('-U' '00000000-0000-0000-0000-000000000000' "${airootfs_image_tool_options[@]}")
+    mkfs_erofs_options+=('-U' '00000000-0000-0000-0000-000000000000' "${strootfs_image_tool_options[@]}")
     _msg_info "Creating EROFS image, this may take some time..."
     mkfs.erofs "${mkfs_erofs_options[@]}" -- "${image_path}" "${pacstrap_dir}"
     _msg_info "Done!"
@@ -240,10 +240,10 @@ _mkairootfs_erofs() {
 _mkchecksum() {
     _msg_info "Creating checksum file for self-test..."
     cd -- "${isofs_dir}/${install_dir}/${arch}"
-    if [[ -e "${isofs_dir}/${install_dir}/${arch}/airootfs.sfs" ]]; then
-        sha512sum airootfs.sfs >airootfs.sha512
-    elif [[ -e "${isofs_dir}/${install_dir}/${arch}/airootfs.erofs" ]]; then
-        sha512sum airootfs.erofs >airootfs.sha512
+    if [[ -e "${isofs_dir}/${install_dir}/${arch}/strootfs.sfs" ]]; then
+        sha512sum strootfs.sfs >strootfs.sha512
+    elif [[ -e "${isofs_dir}/${install_dir}/${arch}/strootfs.erofs" ]]; then
+        sha512sum strootfs.erofs >strootfs.sha512
     fi
     cd -- "${OLDPWD}"
     _msg_info "Done!"
@@ -252,15 +252,15 @@ _mkchecksum() {
 # GPG sign the root file system image.
 _mk_pgp_signature() {
     local gpg_options=()
-    local airootfs_image_filename="${1}"
+    local strootfs_image_filename="${1}"
     _msg_info "Signing rootfs image using GPG..."
 
-    rm -f -- "${airootfs_image_filename}.sig"
+    rm -f -- "${strootfs_image_filename}.sig"
     # Add gpg sender option if the value is provided
     [[ -z "${gpg_sender}" ]] || gpg_options+=('--sender' "${gpg_sender}")
     # always use the .sig file extension, as that is what mkinitcpio-archiso's hooks expect
-    gpg --batch --no-armor --no-include-key-block --output "${airootfs_image_filename}.sig" --detach-sign \
-        --default-key "${gpg_key}" "${gpg_options[@]}" "${airootfs_image_filename}"
+    gpg --batch --no-armor --no-include-key-block --output "${strootfs_image_filename}.sig" --detach-sign \
+        --default-key "${gpg_key}" "${gpg_options[@]}" "${strootfs_image_filename}"
     _msg_info "Done!"
 }
 
@@ -291,7 +291,7 @@ _make_pacman_conf() {
     _msg_info "Using pacman CacheDir: ${_cache_dirs}"
     # take the profile pacman.conf and strip all settings that would break in chroot when using pacman -r
     # append CacheDir and HookDir to [options] section
-    # HookDir is *always* set to the airootfs' override directory
+    # HookDir is *always* set to the strootfs' override directory
     # see `man 8 pacman` for further info
     pacman-conf --config "${pacman_conf}" \
         | sed "/CacheDir/d;/DBPath/d;/HookDir/d;/LogFile/d;/RootDir/d;/\[options\]/a CacheDir = ${_cache_dirs}
@@ -299,15 +299,15 @@ _make_pacman_conf() {
 }
 
 # Prepare working directory and copy custom root file system files.
-_make_custom_airootfs() {
+_make_custom_strootfs() {
     local passwd=()
     local filename permissions
 
     install -d -m 0755 -o 0 -g 0 -- "${pacstrap_dir}"
 
-    if [[ -d "${profile}/airootfs" ]]; then
-        _msg_info "Copying custom airootfs files..."
-        cp -af --no-preserve=ownership,mode -- "${profile}/airootfs/." "${pacstrap_dir}"
+    if [[ -d "${profile}/strootfs" ]]; then
+        _msg_info "Copying custom strootfs files..."
+        cp -af --no-preserve=ownership,mode -- "${profile}/strootfs/." "${pacstrap_dir}"
         # Set ownership and mode for files and directories
         for filename in "${!file_permissions[@]}"; do
             IFS=':' read -ra permissions <<<"${file_permissions["${filename}"]}"
@@ -373,10 +373,10 @@ _make_packages() {
 }
 
 # Customize installation.
-_make_customize_airootfs() {
+_make_customize_strootfs() {
     local passwd=()
 
-    if [[ -e "${profile}/airootfs/etc/passwd" ]]; then
+    if [[ -e "${profile}/strootfs/etc/passwd" ]]; then
         _msg_info "Copying /etc/skel/* to user homes..."
         while IFS=':' read -a passwd -r; do
             # Only operate on UIDs in range 1000–59999
@@ -395,18 +395,18 @@ _make_customize_airootfs() {
             else
                 _msg_error "Failed to set permissions on '${pacstrap_dir}${passwd[5]}'. Outside of valid path." 1
             fi
-        done <"${profile}/airootfs/etc/passwd"
+        done <"${profile}/strootfs/etc/passwd"
         _msg_info "Done!"
     fi
 
-    if [[ -e "${pacstrap_dir}/root/customize_airootfs.sh" ]]; then
-        _msg_info "Running customize_airootfs.sh in '${pacstrap_dir}' chroot..."
-        _msg_warning "customize_airootfs.sh is deprecated! Support for it will be removed in a future archiso version."
-        chmod -f -- +x "${pacstrap_dir}/root/customize_airootfs.sh"
+    if [[ -e "${pacstrap_dir}/root/customize_strootfs.sh" ]]; then
+        _msg_info "Running customize_strootfs.sh in '${pacstrap_dir}' chroot..."
+        _msg_warning "customize_strootfs.sh is deprecated! Support for it will be removed in a future archiso version."
+        chmod -f -- +x "${pacstrap_dir}/root/customize_strootfs.sh"
         # Unset TMPDIR to work around https://bugs.archlinux.org/task/70580
-        eval -- env -u TMPDIR arch-chroot "${pacstrap_dir}" "/root/customize_airootfs.sh"
-        rm -- "${pacstrap_dir}/root/customize_airootfs.sh"
-        _msg_info "Done! customize_airootfs.sh run successfully."
+        eval -- env -u TMPDIR arch-chroot "${pacstrap_dir}" "/root/customize_strootfs.sh"
+        rm -- "${pacstrap_dir}/root/customize_strootfs.sh"
+        _msg_info "Done! customize_strootfs.sh run successfully."
     fi
 }
 
@@ -1240,22 +1240,22 @@ _validate_requirements_bootmode_uefi-x64.grub.eltorito() {
     _validate_requirements_bootmode_uefi-x64.grub.esp
 }
 
-# Build airootfs filesystem image
-_prepare_airootfs_image() {
-    _run_once "_mkairootfs_${airootfs_image_type}"
+# Build strootfs filesystem image
+_prepare_strootfs_image() {
+    _run_once "_mkstrootfs_${strootfs_image_type}"
     _mkchecksum
 
-    if [[ -e "${isofs_dir}/${install_dir}/${arch}/airootfs.sfs" ]]; then
-        airootfs_image_filename="${isofs_dir}/${install_dir}/${arch}/airootfs.sfs"
-    elif [[ -e "${isofs_dir}/${install_dir}/${arch}/airootfs.erofs" ]]; then
-        airootfs_image_filename="${isofs_dir}/${install_dir}/${arch}/airootfs.erofs"
+    if [[ -e "${isofs_dir}/${install_dir}/${arch}/strootfs.sfs" ]]; then
+        strootfs_image_filename="${isofs_dir}/${install_dir}/${arch}/strootfs.sfs"
+    elif [[ -e "${isofs_dir}/${install_dir}/${arch}/strootfs.erofs" ]]; then
+        strootfs_image_filename="${isofs_dir}/${install_dir}/${arch}/strootfs.erofs"
     fi
 
     if [[ -n "${gpg_key}" ]]; then
-        _mk_pgp_signature "${airootfs_image_filename}"
+        _mk_pgp_signature "${strootfs_image_filename}"
     fi
     if [[ -v cert_list ]]; then
-        _cms_sign_artifact "${airootfs_image_filename}"
+        _cms_sign_artifact "${strootfs_image_filename}"
     fi
 }
 
@@ -1324,25 +1324,25 @@ _sign_netboot_artifacts() {
     _msg_info "Done!"
 }
 
-_validate_requirements_airootfs_image_type_squashfs() {
+_validate_requirements_strootfs_image_type_squashfs() {
     if ! command -v mksquashfs &>/dev/null; then
         (( validation_error=validation_error+1 ))
-        _msg_error "Validating '${airootfs_image_type}': mksquashfs is not available on this host. Install 'squashfs-tools'!" 0
+        _msg_error "Validating '${strootfs_image_type}': mksquashfs is not available on this host. Install 'squashfs-tools'!" 0
     fi
 }
 
-_validate_requirements_airootfs_image_type_ext4+squashfs() {
+_validate_requirements_strootfs_image_type_ext4+squashfs() {
     if ! { command -v mkfs.ext4 &>/dev/null && command -v tune2fs &>/dev/null; }; then
         (( validation_error=validation_error+1 ))
-        _msg_error "Validating '${airootfs_image_type}': mkfs.ext4 and/or tune2fs is not available on this host. Install 'e2fsprogs'!" 0
+        _msg_error "Validating '${strootfs_image_type}': mkfs.ext4 and/or tune2fs is not available on this host. Install 'e2fsprogs'!" 0
     fi
-    _validate_requirements_airootfs_image_type_squashfs
+    _validate_requirements_strootfs_image_type_squashfs
 }
 
-_validate_requirements_airootfs_image_type_erofs() {
+_validate_requirements_strootfs_image_type_erofs() {
     if ! command -v mkfs.erofs &>/dev/null; then
         (( validation_error=validation_error+1 ))
-        _msg_error "Validating '${airootfs_image_type}': mkfs.erofs is not available on this host. Install 'erofs-utils'!" 0
+        _msg_error "Validating '${strootfs_image_type}': mkfs.erofs is not available on this host. Install 'erofs-utils'!" 0
     fi
 }
 
@@ -1448,16 +1448,16 @@ _validate_common_requirements_buildmode_iso_netboot() {
         fi
     fi
 
-    # Check if the specified airootfs_image_type is supported
-    if typeset -f "_mkairootfs_${airootfs_image_type}" &>/dev/null; then
-        if typeset -f "_validate_requirements_airootfs_image_type_${airootfs_image_type}" &>/dev/null; then
-            "_validate_requirements_airootfs_image_type_${airootfs_image_type}"
+    # Check if the specified strootfs_image_type is supported
+    if typeset -f "_mkstrootfs_${strootfs_image_type}" &>/dev/null; then
+        if typeset -f "_validate_requirements_strootfs_image_type_${strootfs_image_type}" &>/dev/null; then
+            "_validate_requirements_strootfs_image_type_${strootfs_image_type}"
         else
-            _msg_warning "Function '_validate_requirements_airootfs_image_type_${airootfs_image_type}' does not exist. Validating the requirements of '${airootfs_image_type}' airootfs image type will not be possible."
+            _msg_warning "Function '_validate_requirements_strootfs_image_type_${strootfs_image_type}' does not exist. Validating the requirements of '${strootfs_image_type}' strootfs image type will not be possible."
         fi
     else
         (( validation_error=validation_error+1 ))
-        _msg_error "Unsupported image type: '${airootfs_image_type}'" 0
+        _msg_error "Unsupported image type: '${strootfs_image_type}'" 0
     fi
 }
 
@@ -1883,7 +1883,7 @@ _set_overrides() {
     fi
 
     # Set variables that do not have overrides
-    [[ -n "$airootfs_image_type" ]] || airootfs_image_type="squashfs"
+    [[ -n "$strootfs_image_type" ]] || strootfs_image_type="squashfs"
     [[ -n "$iso_name" ]] || iso_name="${app_name}"
     # Precalculate the ISO's modification date in UTC, i.e. its "UUID"
     TZ=UTC printf -v iso_uuid '%(%F-%H-%M-%S-00)T' "$SOURCE_DATE_EPOCH"
@@ -1978,7 +1978,7 @@ _build_iso_base() {
     # Set the package list to use
     local buildmode_pkg_list=("${pkg_list[@]}")
     # Set up essential directory paths
-    pacstrap_dir="${work_dir}/${arch}/airootfs"
+    pacstrap_dir="${work_dir}/${arch}/strootfs"
     isofs_dir="${work_dir}/iso"
 
     # Create working directory
@@ -1989,10 +1989,10 @@ _build_iso_base() {
     [[ "${quiet}" == "y" ]] || _show_config
     _run_once _make_pacman_conf
     [[ -z "${gpg_key}" ]] || _run_once _export_gpg_publickey
-    _run_once _make_custom_airootfs
+    _run_once _make_custom_strootfs
     _run_once _make_packages
     _run_once _make_version
-    _run_once _make_customize_airootfs
+    _run_once _make_customize_strootfs
     _run_once _make_pkglist
     _run_once _check_if_initramfs_has_ucode
     if [[ "${buildmode}" == 'netboot' ]]; then
@@ -2001,7 +2001,7 @@ _build_iso_base() {
         _make_bootmodes
     fi
     _run_once _cleanup_pacstrap_dir
-    _run_once _prepare_airootfs_image
+    _run_once _prepare_strootfs_image
 }
 
 # Build the bootstrap buildmode
@@ -2044,10 +2044,10 @@ _build_buildmode_netboot() {
 
     _build_iso_base
 
-    if [[ -e "${isofs_dir}/${install_dir}/${arch}/airootfs.sfs" ]]; then
-        airootfs_image_filename="${isofs_dir}/${install_dir}/${arch}/airootfs.sfs"
-    elif [[ -e "${isofs_dir}/${install_dir}/${arch}/airootfs.erofs" ]]; then
-        airootfs_image_filename="${isofs_dir}/${install_dir}/${arch}/airootfs.erofs"
+    if [[ -e "${isofs_dir}/${install_dir}/${arch}/strootfs.sfs" ]]; then
+        strootfs_image_filename="${isofs_dir}/${install_dir}/${arch}/strootfs.sfs"
+    elif [[ -e "${isofs_dir}/${install_dir}/${arch}/strootfs.erofs" ]]; then
+        strootfs_image_filename="${isofs_dir}/${install_dir}/${arch}/strootfs.erofs"
     fi
 
     if [[ -v cert_list ]]; then
