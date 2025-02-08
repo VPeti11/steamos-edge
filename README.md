@@ -19,6 +19,7 @@ Note this project is a **WORK IN PROGRESS** expect bugs!
 - [X] Replace Linux kernel with Linux Neptune (FULLY)
 - [X] Make it compile.
 - [ ] Compilable on *BSD, All Linux Distro's and Windows.
+- [ ] Make it bootable.
 
 # Bleading edge repo
 #### If you want to check out the bleading edge version go to:
