@@ -7,7 +7,7 @@
 > No, this is a stripped version which has everything you need in order to run it.
 ---
 SteamOS SDK is a stripped and fixed version of the SteamOS 3 source code leak. You can ONLY compile it
-while having the Linux Neptune kernel installed[[AUR]](https://aur.archlinux.org/packages/linux-neptune-65).
+while having the Linux Neptune kernel installed[ [AUR] ](https://aur.archlinux.org/packages/linux-neptune-65).
 Note this project is a **WORK IN PROGRESS** expect bugs!
 ---
 # Planned Stuff
@@ -17,3 +17,4 @@ Note this project is a **WORK IN PROGRESS** expect bugs!
 - [ ] x86 & arm support 
 - [X] Replace Linux kernel with Linux Neptune (FULLY)
 - [ ] Make it compile.
+- [ ] Compilable on *BSD, All Linux Distro's and Windows.
