@@ -18,3 +18,7 @@ Note this project is a **WORK IN PROGRESS** expect bugs!
 - [X] Replace Linux kernel with Linux Neptune (FULLY)
 - [ ] Make it compile.
 - [ ] Compilable on *BSD, All Linux Distro's and Windows.
+
+# Bleading edge repo
+#### If you want to check out the bleading edge version go to:
+##### https://github.com/VPeti1/steamos
