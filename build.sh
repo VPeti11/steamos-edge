@@ -10,4 +10,12 @@ else
     export maker=mkarchiso
 fi
 
+if `$2` == `--x86`; then
+    echo "Building for x86"
+    rm -rf profiledef.sh
+    mv profiledef_x86.sh.template profiledef.sh
+else
+     echo "Building for x86_64"
+fi
+
 $maker -v -w ../work/ -o ../out/ .
