@@ -1,15 +1,23 @@
 # SteamOS SDK
 - What is this?
-> SteamOS SDK is an unnoficial SDK for the SteamOS source code leak.
-- Why does this exist?
-> The original SteamOS source code leak was uncompilable.
-- Does this contain every file from the original leak?
-> No, this is a stripped version which has everything you need in order to run it.
----
-
 SteamOS SDK is a stripped and fixed version of the SteamOS 3 source code leak. You can ONLY compile it
 while having the Linux Neptune kernel installed[ [AUR] ](https://aur.archlinux.org/packages/linux-neptune-65).
 Note this project is a **WORK IN PROGRESS** expect bugs!
+
+## How to compile.
+On Arch Linux or any Arch Linux-based distro run:
+```bash
+git clone https://gitlab.com/jupiter-linux/steamos-sdk
+cd steamos-sdk
+sudo sh build.sh
+```
+On any other distro or Windows run:
+```bash
+git clone https://gitlab.com/jupiter-linux/steamos-sdk
+cd steamos-sdk
+docker build --tag 'Dockerfile' .
+docker run
+```
 
 # Planned Stuff
 - [X] Portability aka persistent storage.
