@@ -16,5 +16,5 @@ Note this project is a **WORK IN PROGRESS** expect bugs!
 - [ ] Replace build system with makefiles, cmake, waf, or a custom one.
 - [ ] x86 & arm support 
 - [X] Replace Linux kernel with Linux Neptune (FULLY)
-- [ ] Make it compile.
+- [X] Make it compile.
 - [ ] Compilable on *BSD, All Linux Distro's and Windows.
