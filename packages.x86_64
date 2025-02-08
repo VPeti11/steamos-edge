@@ -139,7 +139,7 @@ network-manager-applet
 mousepad
 gvfs
 neofetch
-xfce4-pulseauio-plugin
+#xfce4-pulseauio-plugin
 pulseaudio-alsa
 noto-fonts
 onboard

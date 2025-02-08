@@ -18,7 +18,7 @@ Note this project is a **WORK IN PROGRESS** expect bugs!
 - [ ] x86 & arm support 
 - [X] Replace Linux kernel with Linux Neptune (FULLY)
 - [X] Make it compile.
-- [ ] Compilable on *BSD, All Linux Distro's and Windows.
+- [X] Compilable on *BSD, All Linux Distro's and Windows.
 - [ ] Make it bootable.
 
 # Bleading edge repo

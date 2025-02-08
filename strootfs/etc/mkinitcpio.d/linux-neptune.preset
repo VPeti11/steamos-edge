@@ -2,7 +2,7 @@
 
 PRESETS=('archiso')
 
-ALL_kver='/boot/vmlinuz-linux-neptune-61'
+ALL_kver='/boot/vmlinuz-linux-neptune'
 archiso_config='/etc/mkinitcpio.conf.d/archiso.conf'
 
-archiso_image="/boot/initramfs-linux-neptune-61.img"
+archiso_image="/boot/initramfs-linux-neptune.img"
