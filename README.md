@@ -11,8 +11,9 @@ while having the Linux Neptune kernel installed[[AUR]](https://aur.archlinux.org
 Note this project is a **WORK IN PROGRESS** expect bugs!
 ---
 # Planned Stuff
-- [ ] Portability aka persistant storage.
+- [X] Portability aka persistent storage.
 - [ ] Installable in generic devices.
 - [ ] Replace build system with makefiles, cmake, waf, or a custom one.
 - [ ] x86 & arm support 
 - [X] Replace Linux kernel with Linux Neptune (FULLY)
+- [ ] Make it compile.
