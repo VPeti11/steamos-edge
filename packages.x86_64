@@ -156,11 +156,11 @@ lib32-mesa-vdpau
 libva-mesa-driver
 mesa-vdpau
 okular
-opencl-mesa
+#opencl-mesa
 p7zip
-paru
+#paru
 powertop
-steam_notif_daemon
+#steam_notif_daemon
 tk
 unrar
 xorg-xhost
