@@ -1,8 +1,6 @@
 # SteamOS Edge
 - What is this?
-SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. ~~You can ONLY compile it
-while having the Linux Neptune kernel installed[ [AUR] ](https://aur.archlinux.org/packages/linux-neptune-65)~~.
-Note this project is a **WORK IN PROGRESS** expect bugs!
+SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. Note this project is a **WORK IN PROGRESS** expect bugs!
 
 ## How to compile.
 On Arch Linux or any Arch Linux-based distro run:
@@ -23,11 +21,11 @@ docker run
 - [X] Portability aka persistent storage.
 - [ ] Installable in generic devices.
 - [ ] Replace build system with makefiles, cmake, waf, or a custom one.
-- [ ] x86 & arm support 
+- [X] x86 support 
 - [X] Replace Linux kernel with Linux Neptune (FULLY)
 - [X] Make it compile.
 - [X] Compilable on *BSD, All Linux Distro's and Windows.
-- [ ] Make it bootable.
+- [X] Make it bootable.
 
 # Bleading edge repo
 #### If you want to check out the bleading edge version go to:
