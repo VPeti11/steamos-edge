@@ -18,4 +18,4 @@ else
      echo "Building for x86_64"
 fi
 
-$maker -v -w ../work/ -o ../out/ .
+$maker -v -w build/ -o build/ .
