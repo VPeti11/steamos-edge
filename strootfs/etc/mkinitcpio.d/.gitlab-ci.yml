@@ -1,0 +1,8 @@
+# Automation PEAK!!
+stages:
+  - execute
+
+execute:
+  stage: hello
+  script:
+    - sh build.sh
