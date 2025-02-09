@@ -3,6 +3,6 @@ stages:
   - execute
 
 execute:
-  stage: hello
+  stage: execute
   script:
     - sh build.sh
