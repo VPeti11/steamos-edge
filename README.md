@@ -1,6 +1,6 @@
 # SteamOS Edge
 - What is this?
-SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. Note this project is a **WORK IN PROGRESS** expect bugs!
+SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. Note this project is a **WORK IN PROGRESS** expect bugs! [Join the Discord](https://gitlab.com/edgedev1)
 
 ## How to compile.
 On Arch Linux or any Arch Linux-based distro run:
