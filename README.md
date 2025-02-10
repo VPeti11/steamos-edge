@@ -27,8 +27,8 @@ docker run
 - [X] Make it compile.
 - [X] Compilable on *BSD, All Linux Distro's and Windows.
 - [X] Make it bootable.
-- [ ] Pre-install a bunch of gaming packages.
-- [ ] Pre-install `linux-firmware-valve` package by `@LukeShortCloud`.
+- [x] Pre-install a bunch of gaming packages.
+- [x] Pre-install `linux-firmware-valve` package by `@LukeShortCloud`.
 - [ ] Pre-install Drivers .
 
 # Download: 
