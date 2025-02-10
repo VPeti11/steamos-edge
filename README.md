@@ -28,7 +28,7 @@ docker run
 - [X] Make it bootable.
 - [x] Pre-install a bunch of gaming packages.
 - [x] Pre-install `linux-firmware-valve` package by `@LukeShortCloud`.
-- [ ] Pre-install Drivers .
+- [X] Pre-install Drivers .
 
 # Download: 
 To install this/download the image, you have to build the images yourself, if you want prebuilt images, we recommend [SteamOS Edge-dev](https://gitlab.com/VPeti11/steamos-edge-dev) (Community Repository).

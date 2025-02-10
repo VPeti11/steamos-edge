@@ -174,3 +174,9 @@ linux-neptune
 linux-firmware-neptune
 linux-firmware-neptune-jupiter
 steamdeck-dsp
+
+# Drivers
+nvidia-dkms
+nvidia-open
+mesa
+lib32-nvidia-utils
