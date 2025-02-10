@@ -1,0 +1,25 @@
+#!/bin/bash
+#  SPDX-License-Identifier: LGPL-2.1+
+#
+#  Copyright © 2025 EdgeDev.
+#
+#  This file is part of SteamOS Edge.
+#
+#  steamos-edge is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License as
+#  published by the Free Software Foundation; either version 2.1 of the License,
+#  or (at your option) any later version.
+
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root. Use sudo!"
+    exit 1
+fi
+mkdir -p /tmp/updating/
+cd /tmp/updating/
+git clone https://gitlab.com/edgedev1/steamos-edge
+cd steamos-edge
+cp -r strootfs/* /
+echo "Updated / directory"
+# TODO: Maybe install all packages
+#PACKAGES="packages.x86_64"
+#pacman -Syu $PACKAGES

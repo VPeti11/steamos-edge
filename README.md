@@ -14,7 +14,6 @@ On any other distro or Windows run:
 ```bash
 git clone https://gitlab.com/edgedev1/steamos-edge
 cd steamos-edge
-docker build --tag 'Dockerfile' .
 docker run
 ```
 
@@ -27,7 +26,7 @@ docker run
 - [X] Make it compile.
 - [X] Compilable on *BSD, All Linux Distro's and Windows.
 - [X] Make it bootable.
-- [ ] Pre-install a bunch of gaming packages.
+- [X] Pre-install a bunch of gaming packages.
 - [ ] Pre-install `linux-firmware-valve` package by `@LukeShortCloud`.
 - [ ] Pre-install Drivers .
 
@@ -51,7 +50,7 @@ To install this/download the image, you have to build the images yourself, if yo
 | Package managers (CLI) | flatpak, nix, pacman | flatpak, nix, pacman  |
 | Preferred package manager (CLI) | flatpak | flatpak |
 | Package managers (GUI) | Discover (flatpak) | Discover (flatpak) |
-| Update type | Image-based | Image-based |
+| Update type | Image-based | steamos_edge_update |
 | Number of installed packages | Small | Small |
 | Game launchers | Steam | Steam |
 | Linux kernels | Neptune (6.5) | Linux, Linux Neptune |
