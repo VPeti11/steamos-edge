@@ -55,11 +55,5 @@ To install this/download the image, you have to build the images yourself, if yo
 | Number of installed packages | Small | Small |
 | Game launchers | Steam | Steam |
 | Linux kernels | Neptune (6.5) | Linux, Linux Neptune |
-| Additional Apple Intel Mac drivers | No | Yes |
-| Additional ASUS laptop drivers | No | Yes |
-| Additional ASUS ROG Ally handheld drivers | Yes | Yes |
-| Additional AYANEO handheld drivers | No | Yes |
-| Additional Framework Computer drivers | No | Yes |
-| Additional Microsoft Surface laptop drivers | No | Yes |
 | Desktop environment | KDE Plasma 5 | KDE Plasma 6 |
 | Desktop theme | Vapor | Vapor |
