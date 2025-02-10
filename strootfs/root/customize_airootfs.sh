@@ -6,3 +6,6 @@ useradd -M deck -g deck
 chown -R deck /home/deck
 echo -e "deck\ndeck" | sudo passwd deck
 systemctl enable /etc/systemd/system/pr.service # Maybe this works
+# Install FlatPak
+flatpak install flathub --user -y net.lutris.Lutris
+flatpak install flathub com.usebottles.bottles
