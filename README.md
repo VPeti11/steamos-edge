@@ -38,3 +38,28 @@ To install this/download the image, you have to build the images yourself, if yo
 
 # Variations
 #### If you want to check out variations of this project read VERSIONS.md
+
+| Features | SteamOS 3 | SteamOS Edge |
+| --- | --- | --- |
+| SteamOS repositories | Yes | Yes |
+| Arch Linux packages | Old | New |
+| Boot compatibility | UEFI | UEFI and legacy BIOS |
+| Graphics drivers | AMD | AMD, Intel [Test if NVIDIA drivers work.] |
+| Read-only file system | Yes | No |
+| Encrypted file system | No | No |
+| Number of possible file system backups | 1 | Unlimited |
+| Package managers (CLI) | flatpak, nix, pacman | flatpak, nix, pacman  |
+| Preferred package manager (CLI) | flatpak | flatpak |
+| Package managers (GUI) | Discover (flatpak) | Discover (flatpak) |
+| Update type | Image-based | Image-based |
+| Number of installed packages | Small | Small |
+| Game launchers | Steam | Steam |
+| Linux kernels | Neptune (6.5) | Linux, Linux Neptune |
+| Additional Apple Intel Mac drivers | No | Yes |
+| Additional ASUS laptop drivers | No | Yes |
+| Additional ASUS ROG Ally handheld drivers | Yes | Yes |
+| Additional AYANEO handheld drivers | No | Yes |
+| Additional Framework Computer drivers | No | Yes |
+| Additional Microsoft Surface laptop drivers | No | Yes |
+| Desktop environment | KDE Plasma 5 | KDE Plasma 6 |
+| Desktop theme | Vapor | Vapor |

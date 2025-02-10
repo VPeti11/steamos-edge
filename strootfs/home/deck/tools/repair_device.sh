@@ -12,6 +12,9 @@ set -eu
 die() { echo >&2 "!! $*"; exit 1; }
 readvar() { IFS= read -r -d '' "$1" || true; }
 
+# If you wish to install SteamOS-Edge, uncomment the line below
+# and comment line 18.
+#DISK=/dev/sda1
 DISK=/dev/nvme0n1
 DISK_SUFFIX=p
 DOPARTVERIFY=1
