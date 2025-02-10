@@ -5,16 +5,15 @@ SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. Note this
 ## How to compile.
 On Arch Linux or any Arch Linux-based distro run:
 ```bash
-git clone https://gitlab.com/jupiter-linux/steamos-edge
+git clone https://gitlab.com/edgedev1/steamos-edge
 cd steamos-edge
 chmod +x ./build.sh
 sudo ./build.sh
 ```
 On any other distro or Windows run:
 ```bash
-git clone https://gitlab.com/jupiter-linux/steamos-edge
+git clone https://gitlab.com/edgedev1/steamos-edge
 cd steamos-edge
-docker build --tag 'Dockerfile' .
 docker run
 ```
 
@@ -51,7 +50,7 @@ To install this/download the image, you have to build the images yourself, if yo
 | Package managers (CLI) | flatpak, nix, pacman | flatpak, nix, pacman  |
 | Preferred package manager (CLI) | flatpak | flatpak |
 | Package managers (GUI) | Discover (flatpak) | Discover (flatpak) |
-| Update type | Image-based | Image-based |
+| Update type | Image-based | steamos_edge_update |
 | Number of installed packages | Small | Small |
 | Game launchers | Steam | Steam |
 | Linux kernels | Neptune (6.5) | Linux, Linux Neptune |

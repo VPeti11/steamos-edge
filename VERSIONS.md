@@ -20,7 +20,7 @@
     Maintainer: VPeti11
 
 ## Jupiter Linux/SteamOS Edge
-#### https://gitlab.com/jupiter-linux/steamos-edge
+#### https://gitlab.com/edgedev1/steamos-edge
 #### Main repo
     Kernel: Neptune - Valve
     Repo: https://steamdeck-packages.steamos.cloud/archlinux-mirror/
