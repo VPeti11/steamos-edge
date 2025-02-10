@@ -170,3 +170,7 @@ distrobox
 cmake
 python
 linux-neptune
+# I forgot to restore these...
+linux-firmware-neptune
+linux-firmware-neptune-jupiter
+steamdeck-dsp
