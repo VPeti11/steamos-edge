@@ -20,23 +20,21 @@ docker run
 
 # Planned Stuff
 - [X] Portability aka persistent storage.
-- [X] Installable on generic devices.
+- [ ] Installable on generic devices.
 - [X] Replace build system with makefiles, cmake, waf, or a custom one.
 - [X] x86 support 
 - [X] Replace Linux kernel with Linux Neptune (FULLY)
 - [X] Make it compile.
 - [X] Compilable on *BSD, All Linux Distro's and Windows.
 - [X] Make it bootable.
+- [ ] Pre-install a bunch of gaming packages.
+- [ ] Pre-install `linux-firmware-valve` package by `@LukeShortCloud`.
+- [ ] Pre-install Drivers .
 
-# Bleading edge repo
-#### If you want to check out the bleading edge version go to:
-##### https://github.com/VPeti1/steamos
+# Download: 
+To install this/download the image, you have to build the images yourself, if you want prebuilt images, we recommend [SteamOS Edge-dev](https://gitlab.com/VPeti11/steamos-edge-dev) (Community Repository).
 
 ---
-# About the leak
-The SteamOS (3.0) Source Code (and other repositories) were leaked by few amount of individuals (GuestSneezePlayZ, YourLocalMoon, etc), The original leak had a bunch of files missing. if you want to know about the devlopment history of the project, check DEV.md.
-# Download 
-https://github.com/VPeti1/steamos-edge-dev/releases/tag/img1
 
 # Variations
 #### If you want to check out variations of this project read VERSIONS.md
