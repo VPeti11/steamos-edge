@@ -5,14 +5,14 @@ SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. Note this
 ## How to compile.
 On Arch Linux or any Arch Linux-based distro run:
 ```bash
-git clone https://gitlab.com/jupiter-linux/steamos-edge
+git clone https://gitlab.com/edgedev1/steamos-edge
 cd steamos-edge
 chmod +x ./build.sh
 sudo ./build.sh
 ```
 On any other distro or Windows run:
 ```bash
-git clone https://gitlab.com/jupiter-linux/steamos-edge
+git clone https://gitlab.com/edgedev1/steamos-edge
 cd steamos-edge
 docker build --tag 'Dockerfile' .
 docker run
