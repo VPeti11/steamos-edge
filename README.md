@@ -1,6 +1,6 @@
 # SteamOS Edge
 - What is this?
-SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. Note this project is a **WORK IN PROGRESS** expect bugs! [Join the Discord](https://gitlab.com/edgedev1)
+SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. Note this project is a **WORK IN PROGRESS** expect bugs! [Join the Discord](https://discord.gg/ChDGTpvzZv)
 
 ## How to compile.
 On Arch Linux or any Arch Linux-based distro run:
@@ -19,19 +19,19 @@ docker run
 
 # Planned Stuff
 - [X] Portability aka persistent storage.
-- [ ] Installable on generic devices.
+- [X] Installable on generic devices. (Using [SteamOS Upstream](https://gitlab.com/edgedev1/steamos-upstream) or [SteamOS Downstream](https://gitlab.com/edgedev1/steamos-downstream) or [SteamOS Extra](https://gitlab.com/edgedev1/steamos-extra))
 - [X] Replace build system with makefiles, cmake, waf, or a custom one.
 - [X] x86 support 
 - [X] Replace Linux kernel with Linux Neptune (FULLY)
 - [X] Make it compile.
 - [X] Compilable on *BSD, All Linux Distro's and Windows.
-- [X] Make it bootable.
+- [X] Make it bootable. (ISO from main SteamOS Edge repo only boots on neptune compatible devices)
 - [x] Pre-install a bunch of gaming packages.
 - [x] Pre-install `linux-firmware-valve` package by `@LukeShortCloud`.
 - [X] Pre-install Drivers .
 
-# Download: 
-To install this/download the image, you have to build the images yourself, if you want prebuilt images, we recommend [SteamOS Edge-dev](https://gitlab.com/VPeti11/steamos-edge-dev) (Community Repository).
+# Downloads
+For downloads check out DOWNLOADS.md
 
 ---
 
