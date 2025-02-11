@@ -11,18 +11,18 @@ The SteamOS (3.0) Source Code (and other repositories) were leaked by few amount
 # Opening the leak
 What is exactly in the leak? Let's see!
 ```
-airootfs
-efiboot
-neptune
-syslinux
-bootstrap_packages.x86_64
-packages.x86_64
-lastsync
-lastupdate
-mksteamos
-pacman.conf
-profiledef.sh
-README.txt
+airootfs - Main rootfilesystem
+efiboot - SystemD BootLoader
+neptune - Compile kernel files
+syslinux - Syslinux BootLoader
+bootstrap_packages.x86_64 - Bootstrapped Pre-Installed packages
+packages.x86_64 - Packages pre-installed
+lastsync - Self-explainable
+lastupdate - Self-explainable
+mksteamos - SteamOS build script
+pacman.conf - Pacman.conf with SteamOS repositories
+profiledef.sh - Defines shit for mksteamos
+README.txt - Note from the original leaker
 ```
 Wait a readme.txt? what does this say?
 ```
@@ -32,7 +32,7 @@ A few schizoids managed to grab both these codebases during his work on some 60t
 A lot of interesting knowledge can be gained from the SteamOS codebase and a lot of resourceful information can come of it. Go wild!
 (By-the-way most of these files have been slightly edited so dont expect to it to compile because we've fucked up alot of shit.)
 ```
-Okay.
+Neat!
 
 # Building SteamOS: mksteamos
 So the mksteamos script was a bit rigged.
