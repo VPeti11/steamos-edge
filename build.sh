@@ -22,21 +22,3 @@ if [[ -n $file ]]; then
 else
     echo "No matching file found."
 fi
-
-# Legacy Stuff...
-#export maker=mksteamos
-#if `$1` == `mksteamos`; then
-#    export maker=mksteamos
-#else
-#    export maker=mkarchiso
-#fi
-#
-#if `$2` == `--x86`; then
-#    echo "Building for x86"
-#    rm -rf profiledef.sh
-#    mv profiledef_x86.sh.template profiledef.sh
-#else
-#     echo "Building for x86_64"
-#fi
-#
-#$maker -v -w build/ -o build/ .
