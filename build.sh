@@ -11,7 +11,7 @@ else
 fi
 
 sudo chmod +x ./mksteamos
-sudo ./mksteamos -v ./
+sudo ./mksteamos -v -w build/ -o build/ .
 
 # Legacy Stuff...
 #export maker=mksteamos
