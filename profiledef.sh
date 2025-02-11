@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 
-iso_name="SteamOS"
-iso_label="steamdeck-repair_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
+iso_name="SteamOS Edge"
+iso_label="edge-steamdeck-repair_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
 iso_publisher="SteamOS <https://store.steampowered.com/steamdeck/>"
 iso_application="SteamOS Live/Rescue image"
 iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"
