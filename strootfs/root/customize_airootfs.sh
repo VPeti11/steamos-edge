@@ -12,6 +12,6 @@ pacman -U 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst
 pacman -U 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
 echo -e '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist' | sudo tee -a /etc/pacman.conf > /dev/null
 pacman -S yay-bin
-yay -S linux-firmware-valve heroic-games-launcher-bin lutris-git opengamepadui-bin bottles --noconfirm
-
+yay -S linux-firmware-valve heroic-games-launcher-bin opengamepadui-bin bottles --noconfirm --needed
+steamos-readonly disable
 
