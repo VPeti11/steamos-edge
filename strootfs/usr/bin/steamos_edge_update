@@ -20,6 +20,10 @@ git clone https://gitlab.com/edgedev1/steamos-edge
 cd steamos-edge
 cp -r strootfs/* /
 echo "Updated / directory"
-# TODO: Maybe install all packages
-#PACKAGES="packages.x86_64"
-#pacman -Syu $PACKAGES
+# Thanks Quota!
+# https://discord.com/channels/1338559346853810238/1338559346853810241/1338995791443918908
+pacman -Syu $(cat packages.x86_64) --needed --noconfirm
+echo "Installed packages"
+cd /
+rm -rf /tmp/updating/*
+exit -1
