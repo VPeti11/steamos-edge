@@ -174,7 +174,7 @@ func configureRepos(useUpstream bool) error {
 	if useUpstream {
 		src = "./mkedge/upstream.conf"
 	}
-	dest := "./mkedge/pacman.conf"
+	dest := "./pacman.conf"
 	input, err := os.ReadFile(src)
 	if err != nil {
 		return err
@@ -192,11 +192,11 @@ func appendExtraPackages() {
 		"gzdoom",
 		"yay-bin",
 	}
-	appendToFile("mkedge/packages.x86_64", extras)
+	appendToFile("packages.x86_64", extras)
 }
 
 func appendNeptuneKernel() {
-	appendToFile("mkedge/packages.x86_64", []string{"linux-firmware-valve"})
+	appendToFile("packages.x86_64", []string{"linux-firmware-valve"})
 }
 
 func appendToFile(filename string, lines []string) {
