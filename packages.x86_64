@@ -170,21 +170,8 @@ distrobox
 cmake
 python
 linux-neptune
-# I forgot to restore these...
-linux-firmware-neptune
-#linux-firmware-neptune-jupiter
-steamdeck-dsp
-
 # Drivers
 nvidia-dkms
 #nvidia-open
 mesa
 lib32-nvidia-utils
-
-prismlauncher
-lutris-git
-opengamepadui-bin
-bottles
-lgogdownloader
-gzdoom
-yay-bin

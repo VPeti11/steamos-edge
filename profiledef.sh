@@ -2,9 +2,9 @@
 # shellcheck disable=SC2034
 
 iso_name="SteamOS Edge"
-iso_label="edge-steamdeck-repair_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
-iso_publisher="SteamOS <https://store.steampowered.com/steamdeck/>"
-iso_application="SteamOS Live/Rescue image"
+iso_label="steamos-edge_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
+iso_publisher="EdgeDev Group <https://gitlab.com/edgedev1>"
+iso_application="SteamOS Edge image"
 iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"
 install_dir="arch"
 buildmodes=('iso')

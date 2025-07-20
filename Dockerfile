@@ -1,4 +1,4 @@
-FROM linuxserver/steamos:latest
+FROM archlinux:latest
 
 ENV LANG=C.UTF-8
 
@@ -8,6 +8,8 @@ RUN sudo pacman -Syu --noconfirm \
 
 RUN git clone https://gitlab.com/edgedev1/steamos-edge.git && cd steamos-edge
 
-RUN ./build.sh
+RUN chmod +x mkedgescript
+
+RUN ./mkedgescript
 
 CMD ["bash"]

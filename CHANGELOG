@@ -1,3 +1,0 @@
-# VERSION 2.0
-- Added native x86 support
-- Updated update script to install all packages while updating then clean after completing
