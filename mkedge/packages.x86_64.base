@@ -1,3 +1,4 @@
+arch-install-scripts
 alsa-utils
 amd-ucode
 arch-install-scripts
@@ -138,7 +139,7 @@ networkmanager
 network-manager-applet
 mousepad
 gvfs
-neofetch
+fastfetch
 #xfce4-pulseauio-plugin
 pulseaudio-alsa
 noto-fonts
@@ -169,7 +170,6 @@ flatpak
 distrobox
 cmake
 python
-linux-neptune
 # Drivers
 nvidia-dkms
 #nvidia-open

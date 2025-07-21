@@ -32,6 +32,12 @@ var colors = []string{
 	//"\033[96m", // Bright Cyan
 }
 
+func isSudo() bool {
+	// Check the effective user ID (EUID)
+	euid := os.Geteuid()
+	return euid == 0
+}
+
 func printFancyInline(args ...interface{}) {
 	text := fmt.Sprint(args...)
 
@@ -87,6 +93,13 @@ func main() {
 		printFancy("This script requires pacman (Arch Linux). Are you sure you're on Arch?")
 		os.Exit(1)
 	}
+	if isSudo() {
+		printFancy("Running as root (sudo)")
+	} else {
+		printFancy("Not running as root")
+		os.Exit(1)
+	}
+	
 	printFancy("MKEDGE made by VPeti")
 	time.Sleep(15 / 10 * time.Second)
 	clearScreen()
@@ -116,8 +129,9 @@ func main() {
 	}
 
 	pause()
+	clearScreen()
 
-	installDeps := exec.Command("sudo", "pacman", "-Sy", "--noconfirm", "base-devel", "mkarchiso")
+	installDeps := exec.Command("sudo", "pacman", "-Sy", "--noconfirm", "--needed" ,"base-devel", "git")
 	installDeps.Stdout = os.Stdout
 	installDeps.Stderr = os.Stderr
 	fmt.Println("Installing required packages...")
@@ -126,12 +140,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := os.Chmod("mksteamos.sh", 0755); err != nil {
+	src := "./mkedge/packages.x86_64.base"
+	dest := "./packages.x86_64"
+	input, err := os.ReadFile(src)
+	if err != nil {
+		fmt.Println("Failed to copy package base:", err)
+		os.Exit(1)
+	}
+	os.WriteFile(dest, input, 0644)
+
+	if err := os.Chmod("helper.sh", 0755); err != nil {
 		fmt.Println("Failed to make mksteamos.sh executable:", err)
 		os.Exit(1)
 	}
+	
+	clearScreen()
 
-	cmd := exec.Command("sudo", "./mkarchiso", "-v", ".", "/")
+	cmd := exec.Command("sudo", "./helper.sh", "-v", ".", "/")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	fmt.Println("Building image...")
@@ -188,7 +213,6 @@ func appendExtraPackages() {
 		"lutris-git",
 		"opengamepadui-bin",
 		"bottles",
-		"lgogdownloader",
 		"gzdoom",
 		"yay-bin",
 	}
