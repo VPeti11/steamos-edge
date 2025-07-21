@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+var enableExtra int
+
 var enableColor = true
 
 // Global reset code
@@ -103,20 +105,44 @@ func main() {
 	printFancy("MKEDGE made by VPeti")
 	time.Sleep(15 / 10 * time.Second)
 	clearScreen()
-	reader := bufio.NewReader(os.Stdin)
+reader := bufio.NewReader(os.Stdin)
 
-	useUpstream := ask(reader, "Do you want to use upstream repositories? (y/n): ")
-	err := configureRepos(useUpstream)
-	if err != nil {
-		printFancy("Error configuring repos")
-		os.Exit(1)
-	}
-	clearScreen()
+printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
+input, _ := reader.ReadString('\n')
+input = strings.TrimSpace(input)
+
+var mode int
+
+enableExtra = 1
+switch input {
+case "1":
+	mode = 1
+case "2":
+	mode = 2
+case "3":
+	mode = 3
+	enableExtra = 0
+default:
+	printFancy("Invalid choice.")
+	os.Exit(1)
+}
+
+err := configureRepos(mode)
+if err != nil {
+	printFancy("Error configuring repos")
+	os.Exit(1)
+}
+
+clearScreen()
+
+	if enableExtra == 1 {
+
 	extraPkgs := ask(reader, "Do you want to add extra packages? (y/n): ")
 	if extraPkgs {
 		appendExtraPackages()
 	}
 	clearScreen()
+}
 	neptuneKernel := ask(reader, "Do you want the Neptune kernel? (y/n): ")
 	if neptuneKernel {
 		appendNeptuneKernel()
@@ -141,13 +167,18 @@ func main() {
 	}
 
 	src := "./mkedge/packages.x86_64.base"
-	dest := "./packages.x86_64"
-	input, err := os.ReadFile(src)
-	if err != nil {
-		fmt.Println("Failed to copy package base:", err)
-		os.Exit(1)
-	}
-	os.WriteFile(dest, input, 0644)
+dest := "./packages.x86_64"
+pkgData, err := os.ReadFile(src)
+if err != nil {
+	fmt.Println("Failed to copy package base:", err)
+	os.Exit(1)
+}
+if err := os.WriteFile(dest, pkgData, 0644); err != nil {
+	fmt.Println("Failed to write package base:", err)
+	os.Exit(1)
+}
+
+
 
 	if err := os.Chmod("helper.sh", 0755); err != nil {
 		fmt.Println("Failed to make mksteamos.sh executable:", err)
@@ -194,18 +225,35 @@ func ask(reader *bufio.Reader, prompt string) bool {
 	return answer == "y" || answer == "yes"
 }
 
-func configureRepos(useUpstream bool) error {
-	src := "./mkedge/downstream.conf"
-	if useUpstream {
+func configureRepos(mode int) error {
+	var src string
+
+	switch mode {
+	case 1:
+		src = "./mkedge/downstream.conf"
+	case 2:
 		src = "./mkedge/upstream.conf"
+	case 3:
+		src = "./mkedge/32.conf"
+	default:
+		return fmt.Errorf("invalid mode: %d", mode)
 	}
+
 	dest := "./pacman.conf"
-	input, err := os.ReadFile(src)
+	inputBytes, err := os.ReadFile(src) // Correct type: []byte
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read source config: %w", err)
 	}
-	return os.WriteFile(dest, input, 0644)
+
+	err = os.WriteFile(dest, inputBytes, 0644) // []byte is expected
+	if err != nil {
+		return fmt.Errorf("failed to write destination config: %w", err)
+	}
+
+	return nil
 }
+
+
 
 func appendExtraPackages() {
 	extras := []string{
