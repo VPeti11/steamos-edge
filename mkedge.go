@@ -101,48 +101,48 @@ func main() {
 		printFancy("Not running as root")
 		os.Exit(1)
 	}
-	
+
 	printFancy("MKEDGE made by VPeti")
 	time.Sleep(15 / 10 * time.Second)
 	clearScreen()
-reader := bufio.NewReader(os.Stdin)
+	reader := bufio.NewReader(os.Stdin)
 
-printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
-input, _ := reader.ReadString('\n')
-input = strings.TrimSpace(input)
+	printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
 
-var mode int
+	var mode int
 
-enableExtra = 1
-switch input {
-case "1":
-	mode = 1
-case "2":
-	mode = 2
-case "3":
-	mode = 3
-	enableExtra = 0
-default:
-	printFancy("Invalid choice.")
-	os.Exit(1)
-}
+	enableExtra = 1
+	switch input {
+	case "1":
+		mode = 1
+	case "2":
+		mode = 2
+	case "3":
+		mode = 3
+		enableExtra = 0
+	default:
+		printFancy("Invalid choice.")
+		os.Exit(1)
+	}
 
-err := configureRepos(mode)
-if err != nil {
-	printFancy("Error configuring repos")
-	os.Exit(1)
-}
+	err := configureRepos(mode)
+	if err != nil {
+		printFancy("Error configuring repos")
+		os.Exit(1)
+	}
 
-clearScreen()
+	clearScreen()
 
 	if enableExtra == 1 {
 
-	extraPkgs := ask(reader, "Do you want to add extra packages? (y/n): ")
-	if extraPkgs {
-		appendExtraPackages()
+		extraPkgs := ask(reader, "Do you want to add extra packages? (y/n): ")
+		if extraPkgs {
+			appendExtraPackages()
+		}
+		clearScreen()
 	}
-	clearScreen()
-}
 	neptuneKernel := ask(reader, "Do you want the Neptune kernel? (y/n): ")
 	if neptuneKernel {
 		appendNeptuneKernel()
@@ -157,7 +157,7 @@ clearScreen()
 	pause()
 	clearScreen()
 
-	installDeps := exec.Command("sudo", "pacman", "-Sy", "--noconfirm", "--needed" ,"base-devel", "git")
+	installDeps := exec.Command("sudo", "pacman", "-Sy", "--noconfirm", "--needed", "arch-install-scripts", "base-devel", "git", "squashfs-tools", "mtools", "dosfstools")
 	installDeps.Stdout = os.Stdout
 	installDeps.Stderr = os.Stderr
 	fmt.Println("Installing required packages...")
@@ -167,24 +167,22 @@ clearScreen()
 	}
 
 	src := "./mkedge/packages.x86_64.base"
-dest := "./packages.x86_64"
-pkgData, err := os.ReadFile(src)
-if err != nil {
-	fmt.Println("Failed to copy package base:", err)
-	os.Exit(1)
-}
-if err := os.WriteFile(dest, pkgData, 0644); err != nil {
-	fmt.Println("Failed to write package base:", err)
-	os.Exit(1)
-}
-
-
-
-	if err := os.Chmod("helper.sh", 0755); err != nil {
-		fmt.Println("Failed to make mksteamos.sh executable:", err)
+	dest := "./packages.x86_64"
+	pkgData, err := os.ReadFile(src)
+	if err != nil {
+		fmt.Println("Failed to copy package base:", err)
 		os.Exit(1)
 	}
-	
+	if err := os.WriteFile(dest, pkgData, 0644); err != nil {
+		fmt.Println("Failed to write package base:", err)
+		os.Exit(1)
+	}
+
+	if err := os.Chmod("helper.sh", 0755); err != nil {
+		fmt.Println("Failed to make helper.sh executable:", err)
+		os.Exit(1)
+	}
+
 	clearScreen()
 
 	cmd := exec.Command("sudo", "./helper.sh", "-v", ".", "/")
@@ -194,6 +192,13 @@ if err := os.WriteFile(dest, pkgData, 0644); err != nil {
 	if err := cmd.Run(); err != nil {
 		fmt.Println("Build failed:", err)
 		os.Exit(1)
+	}
+
+	clearScreen()
+	makeiso := ask(reader, "Do you want to make the iso? (y/n): ")
+	if !makeiso {
+		fmt.Println("Exiting without making the iso.")
+		os.Exit(0)
 	}
 
 	match, err := filepath.Glob("SteamOS*.img")
@@ -253,8 +258,6 @@ func configureRepos(mode int) error {
 	return nil
 }
 
-
-
 func appendExtraPackages() {
 	extras := []string{
 		"prismlauncher",
@@ -263,6 +266,16 @@ func appendExtraPackages() {
 		"bottles",
 		"gzdoom",
 		"yay-bin",
+		"antimicrox-git",
+		"balena-etcher",
+		"coolercontrol-bin",
+		"betterdiscord-installer-bin",
+		"flatseal",
+		"moonlight-qt-bin",
+		"peazip-qt-bin",
+		"polychromatic-git",
+		"protonup-qt-bin",
+		"sunshine-bin",
 	}
 	appendToFile("packages.x86_64", extras)
 }
