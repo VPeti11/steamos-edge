@@ -270,7 +270,6 @@ func appendExtraPackages() {
 		"balena-etcher",
 		"coolercontrol-bin",
 		"betterdiscord-installer-bin",
-		"flatseal",
 		"moonlight-qt-bin",
 		"peazip-qt-bin",
 		"polychromatic-git",
