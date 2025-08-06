@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"io"
 )
 
 var enableExtra int
@@ -33,6 +34,29 @@ var colors = []string{
 	//"\033[95m", // Bright Magenta
 	//"\033[96m", // Bright Cyan
 }
+
+func copyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return err
+	}
+
+	// Optionally set executable permissions
+	return os.Chmod(dst, 0755)
+}
+
 
 func isSudo() bool {
 	// Check the effective user ID (EUID)
@@ -139,11 +163,28 @@ func main() {
 	switch input {
 	case "1":
 		mode = 1
+		err := copyFile("./mkedge/64.sh", "./profiledef.sh")
+		if err != nil {
+			fmt.Println("Failed to copy 64-bit profile:", err)
+			os.Exit(1)
+		}
+
 	case "2":
 		mode = 2
+		err := copyFile("./mkedge/64.sh", "./profiledef.sh")
+		if err != nil {
+			fmt.Println("Failed to copy 64-bit profile:", err)
+			os.Exit(1)
+		}
+
 	case "3":
 		mode = 3
 		enableExtra = 0
+		err := copyFile("./mkedge/32.sh", "./profiledef.sh")
+		if err != nil {
+			fmt.Println("Failed to copy 32-bit profile:", err)
+			os.Exit(1)
+		}
 	default:
 		printFancy("Invalid choice.")
 		os.Exit(1)
