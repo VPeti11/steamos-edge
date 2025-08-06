@@ -107,6 +107,28 @@ func main() {
 	clearScreen()
 	reader := bufio.NewReader(os.Stdin)
 
+	if _, err := os.Stat("./work"); err == nil {
+		reader := bufio.NewReader(os.Stdin)
+		cont := ask(reader, "'./work' folder exists. Do you want to continue the build? (y/n): ")
+		if cont {
+			cmd := exec.Command("./helper.sh", "./")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			printFancy("Running helper.sh...")
+			if err := cmd.Run(); err != nil {
+				fmt.Println("helper.sh failed:", err)
+				os.Exit(1)
+			}
+			os.Exit(0)
+		} else {
+			printFancy("Removing './work' and './out' folders...")
+			os.RemoveAll("work")
+			os.RemoveAll("out")
+			printFancy("Folders removed. Continuing build.")
+		}
+	}
+
+
 	printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input)
@@ -157,7 +179,7 @@ func main() {
 	pause()
 	clearScreen()
 
-	installDeps := exec.Command("sudo", "pacman", "-Sy", "--noconfirm", "--needed", "arch-install-scripts", "base-devel", "git", "squashfs-tools", "mtools", "dosfstools")
+	installDeps := exec.Command("sudo", "pacman", "-S", "--noconfirm", "--needed", "arch-install-scripts", "base-devel", "git", "squashfs-tools", "mtools", "dosfstools", "xorriso", "e2fsprogs", "erofs-utils", "libarchive", "libisoburn", "gnupg", "grub", "openssl", "python-docutils", "shellcheck")
 	installDeps.Stdout = os.Stdout
 	installDeps.Stderr = os.Stderr
 	fmt.Println("Installing required packages...")
@@ -195,27 +217,32 @@ func main() {
 	}
 
 	clearScreen()
-	makeiso := ask(reader, "Do you want to make the iso? (y/n): ")
-	if !makeiso {
-		fmt.Println("Exiting without making the iso.")
-		os.Exit(0)
+
+	if err := os.Chdir("out"); err != nil {
+		fmt.Println("Failed to enter './out' folder:", err)
+		os.Exit(1)
 	}
 
-	match, err := filepath.Glob("SteamOS*.img")
-	if err != nil || len(match) == 0 {
-		fmt.Println("No SteamOS*.img file found.")
-		return
+	files, err := filepath.Glob("*.img")
+	if err != nil || len(files) == 0 {
+		fmt.Println("No .img files found in './out'.")
+		os.Exit(1)
 	}
-	imgFile := match[0]
-	outFile := "steamos-edge.iso"
 
-	fmt.Printf("Creating ISO from %s...\n", imgFile)
-	copyCmd := exec.Command("dd", "if="+imgFile, "of="+outFile, "bs=4M", "status=progress")
-	copyCmd.Stdout = os.Stdout
-	copyCmd.Stderr = os.Stderr
-	if err := copyCmd.Run(); err != nil {
-		fmt.Println("Failed to create ISO:", err)
+	for _, imgFile := range files {
+		isoFile := strings.TrimSuffix(imgFile, ".img") + ".iso"
+		fmt.Printf("Converting %s to %s...\n", imgFile, isoFile)
+		cmdStr := fmt.Sprintf("dd if=%q of=%q bs=4M status=progress", imgFile, isoFile)
+		convert := exec.Command("sh", "-c", cmdStr)
+		convert.Stdout = os.Stdout
+		convert.Stderr = os.Stderr
+		if err := convert.Run(); err != nil {
+			fmt.Printf("Failed to convert %s: %v\n", imgFile, err)
+		} else {
+			fmt.Printf("Successfully created %s\n", isoFile)
+		}
 	}
+
 }
 
 func isPacmanAvailable() bool {
