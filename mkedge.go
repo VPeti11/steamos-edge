@@ -151,7 +151,7 @@ func main() {
 		}
 	}
 
-	useUpstream()
+	//useUpstream()
 
 	printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
 	input, _ := reader.ReadString('\n')
@@ -267,7 +267,7 @@ func main() {
 	files, err := filepath.Glob("*.img")
 	if err != nil || len(files) == 0 {
 		fmt.Println("No .img files found in './out'.")
-		os.Exit(1)
+		os.Exit(0)
 	}
 
 	for _, imgFile := range files {
