@@ -3,13 +3,13 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
-	"io"
 )
 
 var enableExtra int
@@ -56,7 +56,6 @@ func copyFile(src, dst string) error {
 	// Optionally set executable permissions
 	return os.Chmod(dst, 0755)
 }
-
 
 func isSudo() bool {
 	// Check the effective user ID (EUID)
@@ -152,6 +151,7 @@ func main() {
 		}
 	}
 
+	useUpstream()
 
 	printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
 	input, _ := reader.ReadString('\n')
@@ -198,6 +198,23 @@ func main() {
 
 	clearScreen()
 
+	src := "./mkedge/packages.x86_64.base"
+	dest := "./packages.x86_64"
+	pkgData, err := os.ReadFile(src)
+	if err != nil {
+		fmt.Println("Failed to copy package base:", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(dest, pkgData, 0644); err != nil {
+		fmt.Println("Failed to write package base:", err)
+		os.Exit(1)
+	}
+
+	if err := os.Chmod("helper.sh", 0755); err != nil {
+		fmt.Println("Failed to make helper.sh executable:", err)
+		os.Exit(1)
+	}
+
 	if enableExtra == 1 {
 
 		extraPkgs := ask(reader, "Do you want to add extra packages? (y/n): ")
@@ -226,23 +243,6 @@ func main() {
 	fmt.Println("Installing required packages...")
 	if err := installDeps.Run(); err != nil {
 		fmt.Println("Failed to install required packages.")
-		os.Exit(1)
-	}
-
-	src := "./mkedge/packages.x86_64.base"
-	dest := "./packages.x86_64"
-	pkgData, err := os.ReadFile(src)
-	if err != nil {
-		fmt.Println("Failed to copy package base:", err)
-		os.Exit(1)
-	}
-	if err := os.WriteFile(dest, pkgData, 0644); err != nil {
-		fmt.Println("Failed to write package base:", err)
-		os.Exit(1)
-	}
-
-	if err := os.Chmod("helper.sh", 0755); err != nil {
-		fmt.Println("Failed to make helper.sh executable:", err)
 		os.Exit(1)
 	}
 
@@ -363,5 +363,88 @@ func appendToFile(filename string, lines []string) {
 		if _, err := f.WriteString(line + "\n"); err != nil {
 			fmt.Printf("Failed to write to %s: %v\n", filename, err)
 		}
+	}
+}
+
+func useUpstream() {
+	reader := bufio.NewReader(os.Stdin)
+	printFancy("Do you want to use the staging build (current repo) or the stable build (upstream)?")
+	printFancy("Type 'staging' or 'stable': ")
+
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(strings.ToLower(choice))
+
+	if choice == "staging" {
+		printFancy("Using staging build...")
+
+		printFancy(">> sudo pacman -S --needed --noconfirm git")
+		cmd := exec.Command("sudo", "pacman", "-S", "--needed", "--noconfirm", "git")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Run(); err != nil {
+			fmt.Println("Error installing git:", err)
+			return
+		}
+
+		printFancy(">> git pull")
+		cmd = exec.Command("git", "pull")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Run(); err != nil {
+			fmt.Println("Error pulling current repo:", err)
+			return
+		}
+
+	} else if choice == "stable" {
+		printFancy("Cloning and using stable upstream build...")
+
+		printFancy(">> sudo pacman -S --needed --noconfirm git")
+		cmd := exec.Command("sudo", "pacman", "-S", "--needed", "--noconfirm", "git")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Run(); err != nil {
+			fmt.Println("Error installing git:", err)
+			return
+		}
+		printFancy(">> git clone https://gitlab.com/edgedev1/steamos-upstream.git")
+		cmd2 := exec.Command("git", "clone", "https://gitlab.com/edgedev1/steamos-upstream.git")
+		cmd2.Stdout = os.Stdout
+		cmd2.Stderr = os.Stderr
+		cmd2.Stdin = os.Stdin
+		if err := cmd2.Run(); err != nil {
+			fmt.Println("Error cloning repo:", err)
+			return
+		}
+
+		if err := os.Chdir("steamos-upstream"); err != nil {
+			fmt.Println("Error changing directory:", err)
+			return
+		}
+
+		printFancy(">> chmod +x build.sh")
+		cmd = exec.Command("chmod", "+x", "build.sh")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Println("Error chmod-ing build.sh:", err)
+			return
+		}
+
+		printFancy(">> ./build.sh")
+		cmd = exec.Command("./build.sh")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Run(); err != nil {
+			fmt.Println("Error running build.sh:", err)
+			return
+		}
+
+	} else {
+		fmt.Println("Invalid input. Exiting.")
+		os.Exit(1)
 	}
 }
