@@ -16,9 +16,6 @@ var enableExtra int
 
 var enableColor = true
 
-// Global reset code
-const reset = "\033[0m"
-
 // All supported ANSI colors
 var colors = []string{
 	"\033[31m", // Red
@@ -81,14 +78,6 @@ func randColor() string {
 	return colors[rand.Intn(len(colors))]
 }
 
-func min(a, b, c int) int {
-	if a < b && a < c {
-		return a
-	} else if b < c {
-		return b
-	}
-	return c
-}
 func printFancy(args ...interface{}) {
 	text := fmt.Sprint(args...)
 
@@ -151,7 +140,7 @@ func main() {
 		}
 	}
 
-	useUpstream()
+	clearScreen()
 
 	printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
 	input, _ := reader.ReadString('\n')
@@ -171,11 +160,17 @@ func main() {
 
 	case "2":
 		mode = 2
+		enableExtra = 0
 		err := copyFile("./mkedge/64.sh", "./profiledef.sh")
 		if err != nil {
 			fmt.Println("Failed to copy 64-bit profile:", err)
 			os.Exit(1)
 		}
+		extraPkgs := ask(reader, "Do you want to add extra packages? (y/n): ")
+		if extraPkgs {
+			appendExtraPackagesdwn()
+		}
+		clearScreen()
 
 	case "3":
 		mode = 3
@@ -222,12 +217,14 @@ func main() {
 			appendExtraPackages()
 		}
 		clearScreen()
-	}
-	neptuneKernel := ask(reader, "Do you want the Neptune kernel? (y/n): ")
-	if neptuneKernel {
+neptuneKernel := ask(reader, "Do you want the Neptune kernel? (y/n): ")
+if neptuneKernel {
 		appendNeptuneKernel()
 	}
 	clearScreen()
+	}
+
+
 	buildImage := ask(reader, "Do you want to build the image? (y/n): ")
 	if !buildImage {
 		fmt.Println("Exiting without building the image.")
@@ -267,7 +264,7 @@ func main() {
 	files, err := filepath.Glob("*.img")
 	if err != nil || len(files) == 0 {
 		fmt.Println("No .img files found in './out'.")
-		os.Exit(1)
+		os.Exit(0)
 	}
 
 	for _, imgFile := range files {
@@ -347,6 +344,25 @@ func appendExtraPackages() {
 	appendToFile("packages.x86_64", extras)
 }
 
+func appendExtraPackagesdwn() {
+	extras := []string{
+		"prismlauncher",
+		"lutris-git",
+		"opengamepadui-bin",
+		"bottles",
+		"gzdoom",
+		"yay-bin",
+		"antimicrox-git",
+		"coolercontrol-bin",
+		"betterdiscord-installer-bin",
+		"moonlight-qt-bin",
+		"peazip-qt-bin",
+		"polychromatic-git",
+		"protonup-qt-bin",
+	}
+	appendToFile("packages.x86_64", extras)
+}
+
 func appendNeptuneKernel() {
 	appendToFile("packages.x86_64", []string{"linux-firmware-valve"})
 }
@@ -366,85 +382,3 @@ func appendToFile(filename string, lines []string) {
 	}
 }
 
-func useUpstream() {
-	reader := bufio.NewReader(os.Stdin)
-	printFancy("Do you want to use the staging build (current repo) or the stable build (upstream)?")
-	printFancy("Type 'staging' or 'stable': ")
-
-	choice, _ := reader.ReadString('\n')
-	choice = strings.TrimSpace(strings.ToLower(choice))
-
-	if choice == "staging" {
-		printFancy("Using staging build...")
-
-		printFancy(">> sudo pacman -S --needed --noconfirm git")
-		cmd := exec.Command("sudo", "pacman", "-S", "--needed", "--noconfirm", "git")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
-		if err := cmd.Run(); err != nil {
-			fmt.Println("Error installing git:", err)
-			return
-		}
-
-		printFancy(">> git pull")
-		cmd = exec.Command("git", "pull")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
-		if err := cmd.Run(); err != nil {
-			fmt.Println("Error pulling current repo:", err)
-			return
-		}
-
-	} else if choice == "stable" {
-		printFancy("Cloning and using stable upstream build...")
-
-		printFancy(">> sudo pacman -S --needed --noconfirm git")
-		cmd := exec.Command("sudo", "pacman", "-S", "--needed", "--noconfirm", "git")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
-		if err := cmd.Run(); err != nil {
-			fmt.Println("Error installing git:", err)
-			return
-		}
-		printFancy(">> git clone https://gitlab.com/edgedev1/steamos-upstream.git")
-		cmd2 := exec.Command("git", "clone", "https://gitlab.com/edgedev1/steamos-upstream.git")
-		cmd2.Stdout = os.Stdout
-		cmd2.Stderr = os.Stderr
-		cmd2.Stdin = os.Stdin
-		if err := cmd2.Run(); err != nil {
-			fmt.Println("Error cloning repo:", err)
-			return
-		}
-
-		if err := os.Chdir("steamos-upstream"); err != nil {
-			fmt.Println("Error changing directory:", err)
-			return
-		}
-
-		printFancy(">> chmod +x build.sh")
-		cmd = exec.Command("chmod", "+x", "build.sh")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Println("Error chmod-ing build.sh:", err)
-			return
-		}
-
-		printFancy(">> ./build.sh")
-		cmd = exec.Command("./build.sh")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
-		if err := cmd.Run(); err != nil {
-			fmt.Println("Error running build.sh:", err)
-			return
-		}
-
-	} else {
-		fmt.Println("Invalid input. Exiting.")
-		os.Exit(1)
-	}
-}

@@ -1,0 +1,19 @@
+[Desktop Entry]
+Comment[en_US]=
+Comment=
+Exec=/usr/bin/konsole
+GenericName[en_US]=Terminal with repair tools
+GenericName=
+Icon=run-install
+MimeType=
+Name[en_US]=Terminal with repair tools
+Name=Terminal with repair tools
+Path=/home/deck
+StartupNotify=true
+Terminal=false
+TerminalOptions=
+Type=Application
+X-DBUS-ServiceName=
+X-DBUS-StartupType=
+X-KDE-SubstituteUID=false
+X-KDE-Username=

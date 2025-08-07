@@ -1,0 +1,19 @@
+[Desktop Entry]
+Comment[en_US]=
+Comment=
+Exec=/home/deck/tools/repair_system.sh
+GenericName[en_US]=Reinstall SteamOS
+GenericName=
+Icon=run-install
+MimeType=
+Name[en_US]=Reinstall SteamOS
+Name=Reinstall SteamOS
+Path=/home/deck
+StartupNotify=true
+Terminal=true
+TerminalOptions=
+Type=Application
+X-DBUS-ServiceName=
+X-DBUS-StartupType=
+X-KDE-SubstituteUID=false
+X-KDE-Username=
