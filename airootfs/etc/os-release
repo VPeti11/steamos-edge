@@ -1,0 +1,11 @@
+NAME="SteamOS Edge"
+PRETTY_NAME="SteamOS Edge"
+VERSION_CODENAME=stable
+ID=steamos
+ID_LIKE=arch
+ANSI_COLOR="1;35"
+HOME_URL="https://gitlab.com/edgedev1/steamos-edge"
+DOCUMENTATION_URL="https://gitlab.com/edgedev1/steamos-edge"
+SUPPORT_URL="https://gitlab.com/edgedev1"
+BUG_REPORT_URL="https://gitlab.com/edgedev1
+LOGO=steamos
