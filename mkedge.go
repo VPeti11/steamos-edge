@@ -141,6 +141,18 @@ func main() {
 
 	clearScreen()
 
+	src := "./mkedge/packages.x86_64.base"
+	dest := "./packages.x86_64"
+	pkgData, err := os.ReadFile(src)
+	if err != nil {
+		fmt.Println("Failed to copy package base:", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(dest, pkgData, 0644); err != nil {
+		fmt.Println("Failed to write package base:", err)
+		os.Exit(1)
+	}
+
 	printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input)
@@ -151,17 +163,8 @@ func main() {
 	switch input {
 	case "1":
 		mode = 1
-		err := copyFile("./mkedge/64dwn.sh", "./profiledef.sh")
-		if err != nil {
-			fmt.Println("Failed to copy 64-bit profile:", err)
-			os.Exit(1)
-		}
-
-
-	case "2":
-		mode = 2
 		enableExtra = 0
-		err := copyFile("./mkedge/64.sh", "./profiledef.sh")
+		err := copyFile("./mkedge/64dwn.sh", "./profiledef.sh")
 		if err != nil {
 			fmt.Println("Failed to copy 64-bit profile:", err)
 			os.Exit(1)
@@ -171,6 +174,26 @@ func main() {
 			appendExtraPackagesdwn()
 		}
 		clearScreen()
+
+
+	case "2":
+		mode = 2
+		err := copyFile("./mkedge/64.sh", "./profiledef.sh")
+		if err != nil {
+			fmt.Println("Failed to copy 64-bit profile:", err)
+			os.Exit(1)
+		}
+		extraPkgs := ask(reader, "Do you want to add extra packages? (y/n): ")
+		if extraPkgs {
+			appendExtraPackages()
+		}
+		clearScreen()
+		neptuneKernel := ask(reader, "Do you want the Neptune kernel? (y/n): ")
+		if neptuneKernel {
+			appendNeptuneKernel()
+		}
+		clearScreen()
+
 
 	case "3":
 		mode = 3
@@ -185,7 +208,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := configureRepos(mode)
+	err = configureRepos(mode)
 	if err != nil {
 		printFancy("Error configuring repos")
 		os.Exit(1)
@@ -193,37 +216,12 @@ func main() {
 
 	clearScreen()
 
-	src := "./mkedge/packages.x86_64.base"
-	dest := "./packages.x86_64"
-	pkgData, err := os.ReadFile(src)
-	if err != nil {
-		fmt.Println("Failed to copy package base:", err)
-		os.Exit(1)
-	}
-	if err := os.WriteFile(dest, pkgData, 0644); err != nil {
-		fmt.Println("Failed to write package base:", err)
-		os.Exit(1)
-	}
+
 
 	if err := os.Chmod("helper.sh", 0755); err != nil {
 		fmt.Println("Failed to make helper.sh executable:", err)
 		os.Exit(1)
 	}
-
-	if enableExtra == 1 {
-
-		extraPkgs := ask(reader, "Do you want to add extra packages? (y/n): ")
-		if extraPkgs {
-			appendExtraPackages()
-		}
-		clearScreen()
-neptuneKernel := ask(reader, "Do you want the Neptune kernel? (y/n): ")
-if neptuneKernel {
-		appendNeptuneKernel()
-	}
-	clearScreen()
-	}
-
 
 	buildImage := ask(reader, "Do you want to build the image? (y/n): ")
 	if !buildImage {
