@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -152,11 +151,12 @@ func main() {
 	switch input {
 	case "1":
 		mode = 1
-		err := copyFile("./mkedge/64.sh", "./profiledef.sh")
+		err := copyFile("./mkedge/64dwn.sh", "./profiledef.sh")
 		if err != nil {
 			fmt.Println("Failed to copy 64-bit profile:", err)
 			os.Exit(1)
 		}
+
 
 	case "2":
 		mode = 2
@@ -255,31 +255,7 @@ if neptuneKernel {
 	}
 
 	clearScreen()
-
-	if err := os.Chdir("out"); err != nil {
-		fmt.Println("Failed to enter './out' folder:", err)
-		os.Exit(1)
-	}
-
-	files, err := filepath.Glob("*.img")
-	if err != nil || len(files) == 0 {
-		fmt.Println("No .img files found in './out'.")
-		os.Exit(0)
-	}
-
-	for _, imgFile := range files {
-		isoFile := strings.TrimSuffix(imgFile, ".img") + ".iso"
-		fmt.Printf("Converting %s to %s...\n", imgFile, isoFile)
-		cmdStr := fmt.Sprintf("dd if=%q of=%q bs=4M status=progress", imgFile, isoFile)
-		convert := exec.Command("sh", "-c", cmdStr)
-		convert.Stdout = os.Stdout
-		convert.Stderr = os.Stderr
-		if err := convert.Run(); err != nil {
-			fmt.Printf("Failed to convert %s: %v\n", imgFile, err)
-		} else {
-			fmt.Printf("Successfully created %s\n", isoFile)
-		}
-	}
+	printFancy("MKEDGE complete")
 
 }
 
