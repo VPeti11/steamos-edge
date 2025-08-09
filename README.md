@@ -2,11 +2,11 @@
 
 **SteamOS Edge** is a modded version of the leaked 2025 SteamOS base, built for broader hardware compatibility and packed with community-driven gaming features. It provides a persistent liveboot experience designed for general x86 hardware, not just the Steam Deck with added packages, driver tweaks, and customization options.
 
-This project builds on the original SteamOS leak and adds Arch-based tooling, extended package support, and an extensible ISO creation system using ArchISO and `mkedgescript`
+This project builds on the original SteamOS leak and adds Arch-based tooling, extended package support, and an extensible ISO creation system using ArchISO and `mkedgescript`. While building the image yourself is recommended ISO files can be found in the Discord
 
 ***In short:***
 
-SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. This project is **WORK IN PROGRESS** expect bugs!
+SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. This project is **WORK IN PROGRESS** expect bugs! However most issues are now with the 32 bit build since the others are now stable builds. 
 
 ---
 
@@ -68,8 +68,20 @@ Once confirmed, the script:
 * Copies and modifies config files
 * Runs `helper.sh` to create a working persistent liveboot ISO
 
+3. What Happens Behind the Scenes
+
+Once confirmed, the script will:
+
+    Install all required build tools with pacman
+
+    Set up the ArchISO workspace and directory structure
+
+    Copy in all modified configs (pacman.conf, package lists, overlays, etc.)
+
+    Call helper.sh to assemble the persistent liveboot ISO
+
 At the end, the script outputs:
-`steamos-edge.iso`
+SteamOS_Edge_Stable_Upstream/Downstream + build date + x86_64 or SteamOS_Edge_i686 + build date + i686
 
 ---
 
@@ -133,7 +145,7 @@ mkedge/upstream.conf / mkedge/downstream.conf
 You can also add overlay files, kernel modules, or configs in:
 
 ```
-strootfs/syslinux
+airootfs/syslinux
 ```
 
 If you’re familiar with ArchISO, you’ll feel right at home. Mostly
@@ -166,13 +178,10 @@ SteamOS Edge is open-source and licensed under:
 You’re free to use, modify, and redistribute under the terms of these licenses.
 Full license texts can be found in the repository.
 
-If you want to read the SteamOS license click [here](STEAMOS_LICENSE.txt)
-
 ---
 
 ## Disclaimer
 
-* This is an **unstable build** and may contain bugs or unfinished features
 * Use at your own risk — no guarantees are made regarding stability or data safety
 * This is not affiliated with Valve or the official SteamOS project. Not even the maintainers of [evlaV](https://gitlab.com/evlaV)
 
