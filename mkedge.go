@@ -13,8 +13,6 @@ import (
 	"time"
 )
 
-var enableExtra int
-
 var enableColor = true
 
 // All supported ANSI colors
@@ -143,30 +141,27 @@ func main() {
 
 	clearScreen()
 
-	src := "./mkedge/packages.x86_64.base"
-	dest := "./packages.x86_64"
-	pkgData, err := os.ReadFile(src)
-	if err != nil {
-		fmt.Println("Failed to copy package base:", err)
-		os.Exit(1)
-	}
-	if err := os.WriteFile(dest, pkgData, 0644); err != nil {
-		fmt.Println("Failed to write package base:", err)
-		os.Exit(1)
-	}
-
 	printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input)
 
 	var mode int
 
-	enableExtra = 1
 	switch input {
 	case "1":
 		mode = 1
-		enableExtra = 0
-		err := copyFile("./mkedge/64dwn.sh", "./profiledef.sh")
+		src := "./mkedge/packages.x86_64.base"
+		dest := "./packages.x86_64"
+		pkgData, err := os.ReadFile(src)
+		if err != nil {
+			fmt.Println("Failed to copy package base:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
+			fmt.Println("Failed to write package base:", err)
+			os.Exit(1)
+		}
+		err = copyFile("./mkedge/64dwn.sh", "./profiledef.sh")
 		if err != nil {
 			fmt.Println("Failed to copy 64-bit profile:", err)
 			os.Exit(1)
@@ -179,7 +174,18 @@ func main() {
 
 	case "2":
 		mode = 2
-		err := copyFile("./mkedge/64.sh", "./profiledef.sh")
+		src := "./mkedge/packages.x86_64.base"
+		dest := "./packages.x86_64"
+		pkgData, err := os.ReadFile(src)
+		if err != nil {
+			fmt.Println("Failed to copy package base:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
+			fmt.Println("Failed to write package base:", err)
+			os.Exit(1)
+		}
+		err = copyFile("./mkedge/64.sh", "./profiledef.sh")
 		if err != nil {
 			fmt.Println("Failed to copy 64-bit profile:", err)
 			os.Exit(1)
@@ -197,8 +203,19 @@ func main() {
 
 	case "3":
 		mode = 3
-		enableExtra = 0
-		err := copyFile("./mkedge/32.sh", "./profiledef.sh")
+		src := "./mkedge/packages.i686.base"
+		dest := "./packages.i686"
+		pkgData, err := os.ReadFile(src)
+		if err != nil {
+			fmt.Println("Failed to copy package base:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
+			fmt.Println("Failed to write package base:", err)
+			os.Exit(1)
+		}
+
+		err = copyFile("./mkedge/32.sh", "./profiledef.sh")
 		if err != nil {
 			fmt.Println("Failed to copy 32-bit profile:", err)
 			os.Exit(1)
@@ -208,7 +225,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = configureRepos(mode)
+	err := configureRepos(mode)
 	if err != nil {
 		printFancy("Error configuring repos")
 		os.Exit(1)
