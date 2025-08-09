@@ -7,6 +7,8 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -175,7 +177,6 @@ func main() {
 		}
 		clearScreen()
 
-
 	case "2":
 		mode = 2
 		err := copyFile("./mkedge/64.sh", "./profiledef.sh")
@@ -193,7 +194,6 @@ func main() {
 			appendNeptuneKernel()
 		}
 		clearScreen()
-
 
 	case "3":
 		mode = 3
@@ -214,9 +214,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	replaceCowspace(reader)
+
 	clearScreen()
-
-
 
 	if err := os.Chmod("helper.sh", 0755); err != nil {
 		fmt.Println("Failed to make helper.sh executable:", err)
@@ -356,3 +356,45 @@ func appendToFile(filename string, lines []string) {
 	}
 }
 
+func replaceCowspace(reader *bufio.Reader) {
+	clearScreen()
+	printFancyInline("Enter new cowspace size (default 2G): ")
+	newSize, _ := reader.ReadString('\n')
+	newSize = strings.TrimSpace(newSize)
+	if newSize == "" {
+		newSize = "2G"
+	}
+
+	re := regexp.MustCompile(`cow_spacesize\s*=\s*\S+`)
+
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && info.Name() == "airootfs" {
+			return filepath.SkipDir
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		updated := re.ReplaceAllString(string(data), "cow_spacesize="+newSize)
+		if updated != string(data) {
+			err = os.WriteFile(path, []byte(updated), info.Mode())
+			if err != nil {
+				return err
+			}
+			printFancy("Updated:", path)
+		}
+		return nil
+	})
+
+	if err != nil {
+		printFancy("Error replacing cowspace size:", err)
+	}
+}
