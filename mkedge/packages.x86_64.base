@@ -175,3 +175,4 @@ nvidia-dkms
 #nvidia-open
 mesa
 lib32-nvidia-utils
+linux-headers
