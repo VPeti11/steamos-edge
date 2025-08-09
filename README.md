@@ -37,15 +37,7 @@ This repo contains:
 
 SteamOS Edge is designed to be built on Arch Linux or Arch-based systems. It will not work out-of-the-box on Debian, Fedora, etc. But you can use [Distrobox](https://github.com/89luca89/distrobox)
 
-### 1. Install Dependencies
-
-Run the following to ensure all required tools are available:
-
-```
-sudo pacman -Sy --noconfirm base-devel mkarchiso
-```
-
-### 2. Run the ISO Build Script
+### 1. Run the ISO Build Script
 
 Make the script executable if it isn't already:
 
@@ -59,13 +51,14 @@ Then launch the script:
 ./mkedgescript
 ```
 
-### 3. Script Workflow
+### 2. Script Workflow
 
 The script will guide you through a few choices:
 
 * **Upstream or Downstream repos** – choose Valve’s original or the Arch ones
 * **Extra packages** – add optional gaming tools like Lutris, PrismLauncher, etc.
 * **Kernel options** – optionally include Neptune (Valve’s Steam Deck kernel)
+* **CoWspace size** - adjust the copy-on-write tmpfs size
 * **Build confirmation** – proceed to image creation or exit
 
 Once confirmed, the script:
@@ -73,7 +66,7 @@ Once confirmed, the script:
 * Installs required build tools using pacman
 * Sets up the ArchISO directory structure
 * Copies and modifies config files
-* Runs `mkarchiso` to create a working persistent liveboot ISO
+* Runs `helper.sh` to create a working persistent liveboot ISO
 
 At the end, the script outputs:
 `steamos-edge.iso`
