@@ -24,7 +24,7 @@ func main() {
 		input = "2G"
 	}
 
-	re := regexp.MustCompile(`cow_spacesize\s*=\s*5G`)
+	re := regexp.MustCompile(`cow_spacesize\s*=\s*\S+`)
 
 	err = filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
