@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bufio"
 	"fmt"
 	"io"
@@ -102,14 +103,24 @@ func pause() {
 
 func main() {
 	clearScreen()
-	if !isPacmanAvailable() {
-		printFancy("This script requires pacman (Arch Linux)")
-		os.Exit(1)
+	filename := ".test"
+
+	if _, err := os.Stat(filename); err == nil {
+		printFancy("Bypassing checks")
+		time.Sleep(15 / 10 * time.Second)
+	} else if os.IsNotExist(err) {
+		if !isPacmanAvailable() {
+			printFancy("This script requires pacman (Arch Linux)")
+			os.Exit(1)
+		}
+		if !isSudo() {
+			printFancy("Not running as root")
+			os.Exit(1)
+		}
+	} else {
+		printFancy("Error when checking test file")
 	}
-	if !isSudo() {
-		printFancy("Not running as root")
-		os.Exit(1)
-	}
+
 	printFancy("MKEDGE made by VPeti")
 	time.Sleep(15 / 10 * time.Second)
 	clearScreen()
@@ -143,10 +154,12 @@ func main() {
 	input = strings.TrimSpace(input)
 
 	var mode int
+	var zipName string
 
 	switch input {
 	case "1":
 		mode = 1
+		zipName = "boot64.zip"
 		src := "./mkedge/packages.x86_64.base"
 		dest := "./packages.x86_64"
 		pkgData, err := os.ReadFile(src)
@@ -182,6 +195,7 @@ func main() {
 
 	case "2":
 		mode = 2
+		zipName = "boot64.zip"
 		src := "./mkedge/packages.x86_64.base"
 		dest := "./packages.x86_64"
 		pkgData, err := os.ReadFile(src)
@@ -222,6 +236,7 @@ func main() {
 
 	case "3":
 		mode = 3
+		zipName = "boot32.zip"
 		src := "./mkedge/packages.i686.base"
 		dest := "./packages.i686"
 		pkgData, err := os.ReadFile(src)
@@ -262,6 +277,20 @@ func main() {
 		printFancy("Error configuring repos")
 		os.Exit(1)
 	}
+
+	clearScreen()
+
+	zipPath := filepath.Join("mkedge", zipName)
+	destDir := "."
+
+	printFancy("Extracting ", zipName, " to ", destDir)
+
+	if err := extractZip(zipPath, destDir); err != nil {
+		printFancy("Error during extraction: ", err)
+		return
+	}
+
+	clearScreen()
 
 	replaceCowspace(reader)
 
@@ -446,4 +475,64 @@ func replaceCowspace(reader *bufio.Reader) {
 	if err != nil {
 		printFancy("Error replacing cowspace size:", err)
 	}
+}
+
+func extractZip(zipPath string, destDir string) error {
+	absDest, err := filepath.Abs(destDir)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute dest dir: %w", err)
+	}
+
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return fmt.Errorf("failed to open zip file: %w", err)
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		fpath := filepath.Join(destDir, f.Name)
+		absFile, err := filepath.Abs(fpath)
+		if err != nil {
+			return fmt.Errorf("failed to get absolute path for %s: %w", fpath, err)
+		}
+
+		if !strings.HasPrefix(absFile, absDest+string(os.PathSeparator)) && absFile != absDest {
+			return fmt.Errorf("illegal file path: %s", fpath)
+		}
+
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(fpath, os.ModePerm); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", fpath, err)
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return fmt.Errorf("failed to create directory for file %s: %w", fpath, err)
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open zipped file %s: %w", f.Name, err)
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			rc.Close()
+			return fmt.Errorf("failed to create file %s: %w", fpath, err)
+		}
+
+		_, err = io.Copy(outFile, rc)
+
+		outFile.Close()
+		rc.Close()
+
+		if err != nil {
+			return fmt.Errorf("failed to copy file content for %s: %w", fpath, err)
+		}
+
+		printFancy("Extracted: ", fpath)
+	}
+
+	return nil
 }
