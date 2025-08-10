@@ -103,16 +103,13 @@ func pause() {
 func main() {
 	clearScreen()
 	if !isPacmanAvailable() {
-		printFancy("This script requires pacman (Arch Linux). Are you sure you're on Arch?")
+		printFancy("This script requires pacman (Arch Linux)")
 		os.Exit(1)
 	}
-	if isSudo() {
-		printFancy("Running as root (sudo)")
-	} else {
+	if !isSudo() {
 		printFancy("Not running as root")
 		os.Exit(1)
 	}
-
 	printFancy("MKEDGE made by VPeti")
 	time.Sleep(15 / 10 * time.Second)
 	clearScreen()
@@ -170,6 +167,17 @@ func main() {
 		if extraPkgs {
 			appendExtraPackagesdwn()
 		}
+		src = "./mkedge/helper.sh"
+		dest = "./helper.sh"
+		pkgData, err = os.ReadFile(src)
+		if err != nil {
+			fmt.Println("Failed to copy helper:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
+			fmt.Println("Failed to write helper:", err)
+			os.Exit(1)
+		}
 		clearScreen()
 
 	case "2":
@@ -199,6 +207,17 @@ func main() {
 		if neptuneKernel {
 			appendNeptuneKernel()
 		}
+		src = "./mkedge/helper.sh"
+		dest = "./helper.sh"
+		pkgData, err = os.ReadFile(src)
+		if err != nil {
+			fmt.Println("Failed to copy helper:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
+			fmt.Println("Failed to write helper:", err)
+			os.Exit(1)
+		}
 		clearScreen()
 
 	case "3":
@@ -220,6 +239,19 @@ func main() {
 			fmt.Println("Failed to copy 32-bit profile:", err)
 			os.Exit(1)
 		}
+
+		src = "./mkedge/helper32.sh"
+		dest = "./helper.sh"
+		pkgData, err = os.ReadFile(src)
+		if err != nil {
+			fmt.Println("Failed to copy helper:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
+			fmt.Println("Failed to write helper:", err)
+			os.Exit(1)
+		}
+
 	default:
 		printFancy("Invalid choice.")
 		os.Exit(1)
