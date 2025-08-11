@@ -19,5 +19,15 @@ if [[ -z \$WAYLAND_DISPLAY && \$XDG_VTNR -eq 1 ]]; then
   exec dbus-run-session startplasma-wayland
 fi
 EOF'
-
 sudo chown deck:deck /home/deck/.bash_profile
+sudo getent group wheel || sudo groupadd wheel
+sudo usermod -aG wheel deck
+sudo cp /etc/sudoers /etc/sudoers.bak
+sudo sed -i -e '/^%wheel ALL=(ALL) ALL/ s/^# *//' -e '/^%wheel ALL=(ALL) NOPASSWD: ALL/ d' /etc/sudoers
+sudo bash -c 'cat >> /etc/sudoers <<EOF
+%wheel ALL=(ALL) NOPASSWD: ALL
+EOF'
+sudo sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
+pacman-key --init
+sudo sed -i -E 's/^\s*SigLevel\s*=\s*Required\s+DatabaseOptional\s*/SigLevel = Never/' /etc/pacman.conf
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo

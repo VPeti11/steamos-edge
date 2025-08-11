@@ -171,3 +171,4 @@ mesa
 linux-headers
 # Make sure there is a newline at the end of the file pls
 wget
+firefox
