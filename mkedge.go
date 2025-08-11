@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
 	"math/rand"
@@ -10,112 +11,86 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
 
 var enableColor = true
 
-// All supported ANSI colors
 var colors = []string{
-	"\033[31m", // Red
-	//"\033[33m", // Yellow
-	"\033[32m", // Green
-	//"\033[36m", // Cyan
-	"\033[34m", // Blue
-	//"\033[35m", // Magenta
-	"\033[91m", // Bright Red
-	"\033[92m", // Bright Green
-	//"\033[93m", // Bright Yellow
-	"\033[94m", // Bright Blue
-	//"\033[95m", // Bright Magenta
-	//"\033[96m", // Bright Cyan
-}
-
-func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		return err
-	}
-
-	// Optionally set executable permissions
-	return os.Chmod(dst, 0755)
-}
-
-func isSudo() bool {
-	// Check the effective user ID (EUID)
-	euid := os.Geteuid()
-	return euid == 0
-}
-
-func printFancyInline(args ...interface{}) {
-	text := fmt.Sprint(args...)
-
-	if !enableColor {
-		fmt.Print(text)
-		return
-	}
-
-	for _, ch := range text {
-		fmt.Print(randColor() + string(ch))
-	}
-	fmt.Print("\033[0m") // Reset color but no newline
-}
-
-func randColor() string {
-	return colors[rand.Intn(len(colors))]
-}
-
-func printFancy(args ...interface{}) {
-	text := fmt.Sprint(args...)
-
-	if !enableColor {
-		fmt.Print(text + "\n") // Replace printFancy with raw print
-		return
-	}
-
-	for _, ch := range text {
-		fmt.Print(randColor() + string(ch))
-	}
-	fmt.Print("\033[0m\n")
-}
-
-func clearScreen() {
-	fmt.Print("\033[H\033[2J")
-}
-
-func pause() {
-	printFancy("Press ENTER to continue...")
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	"\033[31m",
+	"\033[32m",
+	"\033[34m",
+	"\033[91m",
+	"\033[92m",
+	"\033[94m",
 }
 
 func main() {
 	clearScreen()
+	// --- Flags ---
+	modeFlag := flag.Int("mode", 0, "Repository mode: 1=Downstream, 2=Upstream, 3=32-bit")
+	extraFlag := flag.Bool("extra", false, "Add extra packages (modes 1,2 only)")
+	neptuneFlag := flag.Bool("neptune", false, "Use Neptune kernel (mode 2 only)")
+	buildFlag := flag.Bool("build", false, "Build the image after setup")
+	cowspaceFlag := flag.String("cowspace", "", "Set cowspace size (default 2G). Use 'skip' to skip changing it")
+	bypassFlag := flag.Bool("bypass", false, "Bypass pacman/root checks")
+	cleanupFlag := flag.Bool("cleanup", false, "Starts from scratch")
+	helpFlag := flag.Bool("help", false, "Show this help menu")
+	flag.Parse()
+
+	if *helpFlag {
+		fmt.Println(`Usage: mkedge [options]
+	
+	Options:
+	  --mode        Repository mode: 1=Downstream, 2=Upstream, 3=32-bit
+	  --extra       Add extra packages (modes 1,2 only)
+	  --neptune     Use Neptune kernel (mode 2 only)
+	  --build       Build the image after setup
+	  --cowspace    Set cowspace size (default 2G. Use 'skip' to skip changing it
+	  --bypass      Bypass checks
+	  --cleanup     Starts from scratch
+	  --help        Show this help menu`)
+		os.Exit(0)
+	}
+
+	if *cleanupFlag {
+		cleanup()
+		os.Exit(0)
+	}
+	if *cowspaceFlag != "" {
+		if *cowspaceFlag != "skip" {
+			if !regexp.MustCompile(`^\d+G$`).MatchString(*cowspaceFlag) {
+				fmt.Println("Invalid cowspace size. Skipping replacing CoWspace")
+				*cowspaceFlag = "skip"
+			}
+		}
+	}
+
 	filename := ".test"
 
 	if _, err := os.Stat(filename); err == nil {
 		printFancy("Bypassing checks")
 		time.Sleep(15 / 10 * time.Second)
 	} else if os.IsNotExist(err) {
-		if !isPacmanAvailable() {
-			printFancy("This script requires pacman (Arch Linux)")
-			os.Exit(1)
-		}
-		if !isSudo() {
-			printFancy("Not running as root")
-			os.Exit(1)
+		if !*bypassFlag {
+			if runtime.GOOS == "windows" {
+				printFancy("USE WSL WE DO NOT SUPPORT WINDOWS!!!")
+				os.Exit(1)
+			}
+			if !isPacmanAvailable() {
+				printFancy("This script requires pacman (Arch Linux)")
+				os.Exit(1)
+			}
+			if !isSudo() {
+				printFancy("Not running as root")
+				os.Exit(1)
+			}
+			if !checkInternet() {
+				printFancy("No internet")
+				os.Exit(1)
+			}
 		}
 	} else {
 		printFancy("Error when checking test file")
@@ -124,185 +99,115 @@ func main() {
 	printFancy("MKEDGE made by VPeti")
 	time.Sleep(15 / 10 * time.Second)
 	clearScreen()
+
 	reader := bufio.NewReader(os.Stdin)
 
+	// --- Handle ./work folder ---
 	if _, err := os.Stat("./work"); err == nil {
-		reader := bufio.NewReader(os.Stdin)
-		cont := ask(reader, "'./work' folder exists. Do you want to continue the build? (y/n): ")
+		cont := *modeFlag != 0
+		if *modeFlag == 0 {
+			cont = ask(reader, "'./work' folder exists. Continue build? (y/n): ")
+		}
+
 		if cont {
-			cmd := exec.Command("./helper.sh", "./")
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			printFancy("Running helper.sh...")
-			if err := cmd.Run(); err != nil {
-				fmt.Println("helper.sh failed:", err)
-				os.Exit(1)
-			}
+			runHelper("sudo", "./helper.sh", "-v", ".", "/")
+			clearScreen()
+			printFancy("MKEDGE complete")
 			os.Exit(0)
 		} else {
-			printFancy("Removing './work' and './out' folders...")
-			os.RemoveAll("work")
-			os.RemoveAll("out")
+			cleanup()
 			printFancy("Folders removed. Continuing build.")
 		}
 	}
 
 	clearScreen()
 
-	printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(input)
+	// --- Choose repository mode ---
+	mode := *modeFlag
+	if mode == 0 {
+		printFancyInline("Which repositories do you want to use?\n[1] Downstream\n[2] Upstream\n[3] 32-bit\nEnter choice: ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+		switch input {
+		case "1":
+			mode = 1
+		case "2":
+			mode = 2
+		case "3":
+			mode = 3
+		default:
+			printFancy("Invalid choice.")
+			os.Exit(1)
+		}
+	}
 
-	var mode int
 	var zipName string
-
-	switch input {
-	case "1":
-		mode = 1
+	switch mode {
+	case 1:
 		zipName = "boot64.zip"
-		src := "./mkedge/packages.x86_64.base"
-		dest := "./packages.x86_64"
-		pkgData, err := os.ReadFile(src)
-		if err != nil {
-			fmt.Println("Failed to copy package base:", err)
-			os.Exit(1)
-		}
-		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
-			fmt.Println("Failed to write package base:", err)
-			os.Exit(1)
-		}
-		err = copyFile("./mkedge/64dwn.sh", "./profiledef.sh")
-		if err != nil {
-			fmt.Println("Failed to copy 64-bit profile:", err)
-			os.Exit(1)
-		}
-		extraPkgs := ask(reader, "Do you want to add extra packages? (y/n): ")
-		if extraPkgs {
+		copyFileMust("./mkedge/packages.x86_64.base", "./packages.x86_64")
+		copyFileMust("./mkedge/64dwn.sh", "./profiledef.sh")
+		if *extraFlag || (*modeFlag == 0 && ask(reader, "Do you want to add extra packages? (y/n): ")) {
 			appendExtraPackagesdwn()
 		}
-		src = "./mkedge/helper.sh"
-		dest = "./helper.sh"
-		pkgData, err = os.ReadFile(src)
-		if err != nil {
-			fmt.Println("Failed to copy helper:", err)
-			os.Exit(1)
-		}
-		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
-			fmt.Println("Failed to write helper:", err)
-			os.Exit(1)
-		}
-		clearScreen()
+		copyFileMust("./mkedge/helper.sh", "./helper.sh")
 
-	case "2":
-		mode = 2
+	case 2:
 		zipName = "boot64.zip"
-		src := "./mkedge/packages.x86_64.base"
-		dest := "./packages.x86_64"
-		pkgData, err := os.ReadFile(src)
-		if err != nil {
-			fmt.Println("Failed to copy package base:", err)
-			os.Exit(1)
-		}
-		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
-			fmt.Println("Failed to write package base:", err)
-			os.Exit(1)
-		}
-		err = copyFile("./mkedge/64.sh", "./profiledef.sh")
-		if err != nil {
-			fmt.Println("Failed to copy 64-bit profile:", err)
-			os.Exit(1)
-		}
-		extraPkgs := ask(reader, "Do you want to add extra packages? (y/n): ")
-		if extraPkgs {
+		copyFileMust("./mkedge/packages.x86_64.base", "./packages.x86_64")
+		copyFileMust("./mkedge/64.sh", "./profiledef.sh")
+		if *extraFlag || (*modeFlag == 0 && ask(reader, "Do you want to add extra packages? (y/n): ")) {
 			appendExtraPackages()
 		}
-		clearScreen()
-		neptuneKernel := ask(reader, "Do you want the Neptune kernel? (y/n): ")
-		if neptuneKernel {
+		if *neptuneFlag || (*modeFlag == 0 && ask(reader, "Do you want the Neptune kernel? (y/n): ")) {
 			appendNeptuneKernel()
 		}
-		src = "./mkedge/helper.sh"
-		dest = "./helper.sh"
-		pkgData, err = os.ReadFile(src)
-		if err != nil {
-			fmt.Println("Failed to copy helper:", err)
-			os.Exit(1)
-		}
-		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
-			fmt.Println("Failed to write helper:", err)
-			os.Exit(1)
-		}
-		clearScreen()
+		copyFileMust("./mkedge/helper.sh", "./helper.sh")
 
-	case "3":
-		mode = 3
+	case 3:
 		zipName = "boot32.zip"
-		src := "./mkedge/packages.i686.base"
-		dest := "./packages.i686"
-		pkgData, err := os.ReadFile(src)
-		if err != nil {
-			fmt.Println("Failed to copy package base:", err)
-			os.Exit(1)
-		}
-		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
-			fmt.Println("Failed to write package base:", err)
-			os.Exit(1)
-		}
-
-		err = copyFile("./mkedge/32.sh", "./profiledef.sh")
-		if err != nil {
-			fmt.Println("Failed to copy 32-bit profile:", err)
-			os.Exit(1)
-		}
-
-		src = "./mkedge/helper32.sh"
-		dest = "./helper.sh"
-		pkgData, err = os.ReadFile(src)
-		if err != nil {
-			fmt.Println("Failed to copy helper:", err)
-			os.Exit(1)
-		}
-		if err := os.WriteFile(dest, pkgData, 0644); err != nil {
-			fmt.Println("Failed to write helper:", err)
-			os.Exit(1)
-		}
-
+		copyFileMust("./mkedge/packages.i686.base", "./packages.i686")
+		copyFileMust("./mkedge/32.sh", "./profiledef.sh")
+		copyFileMust("./mkedge/helper32.sh", "./helper.sh")
 	default:
-		printFancy("Invalid choice.")
+		printFancy("Invalid mode.")
 		os.Exit(1)
 	}
 
-	err := configureRepos(mode)
-	if err != nil {
+	// --- Configure repos ---
+	if err := configureRepos(mode); err != nil {
 		printFancy("Error configuring repos")
 		os.Exit(1)
 	}
 
 	clearScreen()
 
+	// --- Extract ---
 	zipPath := filepath.Join("mkedge", zipName)
-	destDir := "."
-
-	printFancy("Extracting ", zipName, " to ", destDir)
-
-	if err := extractZip(zipPath, destDir); err != nil {
+	printFancy("Extracting ", zipName, " to ", ".")
+	if err := extractZip(zipPath, "."); err != nil {
 		printFancy("Error during extraction: ", err)
 		return
 	}
 
 	clearScreen()
 
-	replaceCowspace(reader)
+	// --- Replace cowspace ---
+	if *cowspaceFlag != "" {
+		replaceCowspaceFlag(*cowspaceFlag)
+	} else {
+		replaceCowspacePrompt(reader)
+	}
 
 	clearScreen()
 
-	if err := os.Chmod("helper.sh", 0755); err != nil {
-		fmt.Println("Failed to make helper.sh executable:", err)
-		os.Exit(1)
+	// --- Build ---
+	build := *buildFlag
+	if *modeFlag == 0 {
+		build = ask(reader, "Do you want to build the image? (y/n): ")
 	}
 
-	buildImage := ask(reader, "Do you want to build the image? (y/n): ")
-	if !buildImage {
+	if !build {
 		fmt.Println("Exiting without building the image.")
 		os.Exit(0)
 	}
@@ -310,29 +215,31 @@ func main() {
 	pause()
 	clearScreen()
 
-	installDeps := exec.Command("sudo", "pacman", "-S", "--noconfirm", "--needed", "arch-install-scripts", "base-devel", "git", "squashfs-tools", "mtools", "dosfstools", "xorriso", "e2fsprogs", "erofs-utils", "libarchive", "libisoburn", "gnupg", "grub", "openssl", "python-docutils", "shellcheck")
-	installDeps.Stdout = os.Stdout
-	installDeps.Stderr = os.Stderr
-	fmt.Println("Installing required packages...")
-	if err := installDeps.Run(); err != nil {
-		fmt.Println("Failed to install required packages.")
-		os.Exit(1)
+	// --- Install dependencies ---
+	if !*bypassFlag {
+
+		installDeps := exec.Command("sudo", "pacman", "-S", "--noconfirm", "--needed",
+			"arch-install-scripts", "base-devel", "git", "squashfs-tools", "mtools", "dosfstools",
+			"xorriso", "e2fsprogs", "erofs-utils", "libarchive", "libisoburn", "gnupg",
+			"grub", "openssl", "python-docutils", "shellcheck")
+		installDeps.Stdout = os.Stdout
+		installDeps.Stderr = os.Stderr
+		installDeps.Stdin = os.Stdin
+		fmt.Println("Installing required packages...")
+		if err := installDeps.Run(); err != nil {
+			fmt.Println("Failed to install required packages.")
+			os.Exit(1)
+		}
 	}
 
 	clearScreen()
-
-	cmd := exec.Command("sudo", "./helper.sh", "-v", ".", "/")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	fmt.Println("Building image...")
-	if err := cmd.Run(); err != nil {
-		fmt.Println("Build failed:", err)
+	if err := os.Chmod("helper.sh", 0755); err != nil {
+		fmt.Println("Failed to make helper.sh executable:", err)
 		os.Exit(1)
 	}
-
+	runHelper("sudo", "./helper.sh", "-v", ".", "/")
 	clearScreen()
 	printFancy("MKEDGE complete")
-
 }
 
 func isPacmanAvailable() bool {
@@ -362,12 +269,12 @@ func configureRepos(mode int) error {
 	}
 
 	dest := "./pacman.conf"
-	inputBytes, err := os.ReadFile(src) // Correct type: []byte
+	inputBytes, err := os.ReadFile(src)
 	if err != nil {
 		return fmt.Errorf("failed to read source config: %w", err)
 	}
 
-	err = os.WriteFile(dest, inputBytes, 0644) // []byte is expected
+	err = os.WriteFile(dest, inputBytes, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write destination config: %w", err)
 	}
@@ -434,49 +341,6 @@ func appendToFile(filename string, lines []string) {
 	}
 }
 
-func replaceCowspace(reader *bufio.Reader) {
-	clearScreen()
-	printFancyInline("Enter new cowspace size (default 2G): ")
-	newSize, _ := reader.ReadString('\n')
-	newSize = strings.TrimSpace(newSize)
-	if newSize == "" {
-		newSize = "2G"
-	}
-
-	re := regexp.MustCompile(`cow_spacesize\s*=\s*\S+`)
-
-	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() && info.Name() == "airootfs" {
-			return filepath.SkipDir
-		}
-		if info.IsDir() {
-			return nil
-		}
-
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-
-		updated := re.ReplaceAllString(string(data), "cow_spacesize="+newSize)
-		if updated != string(data) {
-			err = os.WriteFile(path, []byte(updated), info.Mode())
-			if err != nil {
-				return err
-			}
-			printFancy("Updated:", path)
-		}
-		return nil
-	})
-
-	if err != nil {
-		printFancy("Error replacing cowspace size:", err)
-	}
-}
-
 func extractZip(zipPath string, destDir string) error {
 	absDest, err := filepath.Abs(destDir)
 	if err != nil {
@@ -535,4 +399,149 @@ func extractZip(zipPath string, destDir string) error {
 	}
 
 	return nil
+}
+
+func copyFileMust(src, dest string) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		fmt.Println("Failed to copy:", src, err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(dest, data, 0644); err != nil {
+		fmt.Println("Failed to write:", dest, err)
+		os.Exit(1)
+	}
+}
+
+func runHelper(args ...string) {
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		fmt.Println("Helper failed:", err)
+		os.Exit(1)
+	}
+}
+
+func replaceCowspaceFlag(newSize string) {
+	if strings.ToLower(newSize) == "skip" {
+		printFancy("Skipping cowspace replacement")
+		return
+	}
+	if !regexp.MustCompile(`^\d+G$`).MatchString(newSize) {
+		fmt.Println("Invalid cowspace size. Must be a number followed by 'G', e.g., 2G")
+		return
+	}
+
+	re := regexp.MustCompile(`cow_spacesize\s*=\s*\S+`)
+	_ = filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			if info.Name() == "airootfs" || info.Name() == "mkedge" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if info.Name() == "mkedge.go" {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		updated := re.ReplaceAllString(string(data), "cow_spacesize="+newSize)
+		if updated != string(data) {
+			if err := os.WriteFile(path, []byte(updated), info.Mode()); err != nil {
+				return err
+			}
+			printFancy("Updated:", path)
+		}
+		return nil
+	})
+}
+
+func replaceCowspacePrompt(reader *bufio.Reader) {
+	clearScreen()
+	printFancyInline("Enter new cowspace size (default 2G): ")
+	newSize, _ := reader.ReadString('\n')
+	newSize = strings.TrimSpace(newSize)
+	if newSize == "" {
+		newSize = "2G"
+	}
+	replaceCowspaceFlag(newSize)
+}
+
+func isSudo() bool {
+
+	euid := os.Geteuid()
+	return euid == 0
+}
+
+func printFancyInline(args ...interface{}) {
+	text := fmt.Sprint(args...)
+
+	if !enableColor {
+		fmt.Print(text)
+		return
+	}
+
+	for _, ch := range text {
+		fmt.Print(randColor() + string(ch))
+	}
+	fmt.Print("\033[0m")
+}
+
+func randColor() string {
+	return colors[rand.Intn(len(colors))]
+}
+
+func printFancy(args ...interface{}) {
+	text := fmt.Sprint(args...)
+
+	if !enableColor {
+		fmt.Print(text + "\n")
+		return
+	}
+
+	for _, ch := range text {
+		fmt.Print(randColor() + string(ch))
+	}
+	fmt.Print("\033[0m\n")
+}
+
+func clearScreen() {
+	fmt.Print("\033[H\033[2J")
+}
+
+func pause() {
+	printFancy("Press ENTER to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
+}
+
+func cleanup() {
+	os.RemoveAll("work")
+	os.RemoveAll("out")
+	os.RemoveAll("grub")
+	os.RemoveAll("neptune")
+	os.RemoveAll("efiboot")
+	os.RemoveAll("syslinux")
+	os.Remove("packages.x86_64")
+	os.Remove("packages.i686")
+	os.Remove("helper.sh")
+	os.Remove("pacman.conf")
+	os.Remove("profiledef.sh")
+}
+
+func checkInternet() bool {
+	var cmd *exec.Cmd
+	cmd = exec.Command("ping", "-c", "5", "1.1.1.1")
+	err := cmd.Run()
+	return err == nil
 }

@@ -169,3 +169,4 @@ cmake
 python
 mesa
 linux-headers
+wget

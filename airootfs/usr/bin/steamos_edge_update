@@ -16,14 +16,22 @@ if [[ $EUID -ne 0 ]]; then
 fi
 mkdir -p /tmp/updating/
 cd /tmp/updating/
-git clone https://gitlab.com/edgedev1/steamos-edge
-cd steamos-edge
-cp -r strootfs/* /
-echo "Updated / directory"
+arch=$(uname -m)
+if [[ "$arch" == "x86_64" ]]; then
+    echo "64-bit architecture detected"
+    wget https://gitlab.com/edgedev1/steamos-edge/-/raw/main/mkedge/packages.x86_64.base
+    pacman -Syu $(cat packages.x86_64) --needed --noconfirm
+elif [[ "$arch" == "i686" || "$arch" == "i386" ]]; then
+    echo "32-bit architecture detected"
+    wget https://gitlab.com/edgedev1/steamos-edge/-/raw/main/mkedge/packages.i686.base
+    pacman -Syu $(cat packages.i686) --needed --noconfirm
+else
+    echo "Unknown architecture: $arch"
+fi
+
 # Thanks Quota!
 # https://discord.com/channels/1338559346853810238/1338559346853810241/1338995791443918908
-pacman -Syu $(cat packages.x86_64) --needed --noconfirm
+pacman -Syu
 echo "Installed packages"
 cd /
-rm -rf /tmp/updating/*
-exit -1
+rm -rf /tmp/updating/

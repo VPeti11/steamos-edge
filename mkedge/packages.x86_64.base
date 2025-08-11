@@ -176,3 +176,4 @@ nvidia-dkms
 mesa
 lib32-nvidia-utils
 linux-headers
+wget

@@ -83,6 +83,8 @@ Once confirmed, the script will:
 At the end, the script outputs:
 SteamOS_Edge_Stable_Upstream/Downstream + build date + x86_64 or SteamOS_Edge_i686 + build date + i686
 
+For more info about MKEDGE read the [MKEDGE README](MKEDGE_README.md)
+
 ---
 
 ## Usage
@@ -109,7 +111,7 @@ Note: replace `/dev/sdX` with your USB device path. And in most cases that isnt 
 | **Encrypted file system**         | ❌ No                       | ❌ No                              |
 | **File system backup slots**      | 1                          | Unlimited                         |
 | **CLI Package managers**          | `flatpak`, `nix`, `pacman` | `flatpak`, `pacman`        |
-| **Preferred CLI package manager** | `flatpak`                  | `flatpak`                         |
+| **Preferred CLI package manager** | `flatpak`                  | `pacman`                         |
 | **GUI Package manager**           | Discover (flatpak)         | Discover (flatpak)                |
 | **Update mechanism**              | Image-based (A/B)          | `steamos_edge_update` (custom)    |
 | **Installed package count**       | Small                      | Small/Medium                             |
