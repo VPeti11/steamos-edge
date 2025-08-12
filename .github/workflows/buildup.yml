@@ -33,6 +33,9 @@ jobs:
           echo "Extracting Arch Linux bootstrap..."
           sudo zstd -d /tmp/archlinux-bootstrap.tar.zst -c | sudo tar -x -C /mnt/arch --strip-components=1
 
+          sudo cp /etc/resolv.conf /mnt/arch/etc/resolv.conf
+
+
           echo "Mounting /dev, /proc, /sys into chroot..."
           sudo mount --bind /dev /mnt/arch/dev
           sudo mount --bind /proc /mnt/arch/proc
