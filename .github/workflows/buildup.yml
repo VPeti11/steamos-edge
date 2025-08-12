@@ -41,13 +41,13 @@ jobs:
           sudo mount --bind /proc /mnt/arch/proc
           sudo mount --bind /sys /mnt/arch/sys
 
-          echo "Initializing pacman keys and updating system inside chroot..."
-          sudo chroot /mnt/arch /bin/bash -c "
-            pacman-key --init
-            pacman-key --populate archlinux
-            echo 'Server = https://mirror.rackspace.com/archlinux/$repo/os/x86_64' > /etc/pacman.d/mirrorlist
-            pacman -Sy --noconfirm
-          "
+          sudo chroot /mnt/arch /bin/bash -c '
+          pacman-key --init
+          pacman-key --populate archlinux
+          echo "Server = https://mirror.rackspace.com/archlinux/$repo/os/x86_64" > /etc/pacman.d/mirrorlist
+          pacman -Sy --noconfirm
+          '
+
 
           echo "Installing mkedge build dependencies inside chroot..."
           sudo chroot /mnt/arch /bin/bash -c "
