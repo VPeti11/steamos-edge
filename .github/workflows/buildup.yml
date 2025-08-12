@@ -17,7 +17,7 @@ jobs:
       - name: Install host dependencies for Arch bootstrap and chroot
         run: |
           sudo apt-get update
-          sudo apt-get install -y rsync
+          sudo apt-get install -y rsync zstd
 
 
       - name: Setup Arch Linux chroot environment
@@ -25,9 +25,10 @@ jobs:
           set -e
           sudo mkdir -p /mnt/arch
 
-          ARCH_BASE_URL="https://mirror.rackspace.com/archlinux/iso/latest/archlinux-bootstrap-x86_64.tar.gz"
-          echo "Downloading Arch Linux bootstrap..."
-          sudo curl -L -o /tmp/archlinux-bootstrap.tar.gz "$ARCH_BASE_URL"
+          ARCH_BASE_URL="https://mirror.rackspace.com/archlinux/iso/latest/archlinux-bootstrap-x86_64.tar.zst"
+          sudo curl -L -o /tmp/archlinux-bootstrap.tar.zst "$ARCH_BASE_URL"
+          sudo zstd -d /tmp/archlinux-bootstrap.tar.zst -c | sudo tar -x -C /mnt/arch --strip-components=1
+
 
           echo "Extracting Arch Linux bootstrap..."
           sudo tar -xzf /tmp/archlinux-bootstrap.tar.gz -C /mnt/arch --strip-components=1
