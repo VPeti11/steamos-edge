@@ -1,7 +1,7 @@
 name: Build SteamOS Edge ISO Upstream
 
 on:
-  workflow_dispatch: # manual trigger
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -9,24 +9,54 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install dependencies for mkedge
+      - name: Install minimal dependencies on Ubuntu host to bootstrap Arch chroot
         run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm \
-            arch-install-scripts base-devel git squashfs-tools mtools dosfstools \
-            xorriso e2fsprogs erofs-utils libarchive libisoburn gnupg \
-            grub openssl python-docutils shellcheck
+          sudo apt-get update
+          sudo apt-get install -y arch-install-scripts rsync
 
-      - name: Build ISO with mkedge
+      - name: Setup Arch Linux chroot with mkedge dependencies
         run: |
-          chmod +x ./mkedgescript
-          ./mkedgescript --mode 2 --extra --neptune --cowspace skip --build --bypass
+          sudo mkdir -p /mnt/arch
+
+          sudo pacstrap -c /mnt/arch base
+
+          sudo arch-chroot /mnt/arch pacman -Sy --noconfirm \
+            arch-install-scripts base-devel git squashfs-tools mtools dosfstools \
+            xorriso e2fsprogs erofs-utils libarchive libisoburn gnupg grub \
+            openssl python-docutils shellcheck
+
+          sudo mount --bind /dev /mnt/arch/dev
+          sudo mount --bind /proc /mnt/arch/proc
+          sudo mount --bind /sys /mnt/arch/sys
+
+      - name: Copy source code to chroot
+        run: |
+          sudo rsync -a --exclude=out ./ /mnt/arch/root/steamos-edge/
+
+      - name: Run mkedge build inside chroot
+        run: |
+          sudo chroot /mnt/arch /bin/bash -c "
+            cd /root/steamos-edge
+            chmod +x ./mkedgescript
+            ./mkedgescript --mode 2 --extra --neptune --cowspace skip --build --bypass
+          "
+
+      - name: Copy ISO output back to workspace
+        run: |
+          sudo rsync -a /mnt/arch/root/steamos-edge/out ./out
+
+      - name: Cleanup chroot mounts
+        if: always()
+        run: |
+          sudo umount /mnt/arch/dev || true
+          sudo umount /mnt/arch/proc || true
+          sudo umount /mnt/arch/sys || true
+          sudo rm -rf /mnt/arch
 
       - name: Split ISO into 1.9GB chunks
         run: |
@@ -45,4 +75,3 @@ jobs:
             out/*.iso.part*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
