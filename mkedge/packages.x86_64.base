@@ -179,3 +179,11 @@ linux-headers
 # Make sure there is a newline at the end of the file pls
 wget
 firefox
+ntfs-3g
+linux-firmware
+iw
+iwd
+networkmanager
+xf86-video-intel
+xf86-video-amdgpu
+tzdata

@@ -1,12 +1,10 @@
-# Credit to https://gitlab.com/GuestSneezeOSDev
-# Pulled from: https://gitlab.com/jupiter-linux/steamos-sdk
 [Unit]
-Description=prsist
+Description=Mount all drives on live boot
 After=local-fs.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c "mount /dev/sda2 /mnt && mount --bind /mnt /mnt/overlay"
+ExecStart=/usr/bin/mountdrives.sh
 RemainAfterExit=true
 
 [Install]

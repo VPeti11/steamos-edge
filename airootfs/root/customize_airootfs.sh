@@ -31,3 +31,5 @@ sudo sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
 pacman-key --init
 sudo sed -i -E 's/^\s*SigLevel\s*=\s*Required\s+DatabaseOptional\s*/SigLevel = Never/' /etc/pacman.conf
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+systemctl enable auto-sync-time.service
