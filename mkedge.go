@@ -54,8 +54,15 @@ func main() {
 	  --help        Show this help menu`)
 		os.Exit(0)
 	}
-
-	if *cleanupFlag {
+	if !*bypassFlag && *cleanupFlag {
+		if !isSudo() {
+			printFancy("Not running as root")
+			os.Exit(1)
+		}
+		cleanup()
+		os.Exit(0)
+	}
+	if *bypassFlag && *cleanupFlag {
 		cleanup()
 		os.Exit(0)
 	}
@@ -212,7 +219,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	pause()
 	clearScreen()
 
 	// --- Install dependencies ---
@@ -518,11 +524,6 @@ func printFancy(args ...interface{}) {
 
 func clearScreen() {
 	fmt.Print("\033[H\033[2J")
-}
-
-func pause() {
-	printFancy("Press ENTER to continue...")
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 func cleanup() {
