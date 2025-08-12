@@ -23,7 +23,7 @@ jobs:
           pacman -S --noconfirm \
             arch-install-scripts base-devel git squashfs-tools mtools dosfstools \
             xorriso e2fsprogs erofs-utils libarchive libisoburn gnupg \
-            grub grub-common grub-efi-amd64 openssl python-docutils shellcheck
+            grub grub-common openssl python-docutils shellcheck
 
       - name: Build ISO with mkedge
         run: |
