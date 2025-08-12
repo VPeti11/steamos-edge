@@ -1,10 +1,14 @@
-name: Build SteamOS Edge ISO Upstream
+name: Build SteamOS Edge ISO 32
 
 on:
-  workflow_dispatch: # manual trigger
+  workflow_dispatch:
   push:
     branches:
       - main
+
+permissions:
+  contents: write
+  packages: write
 
 jobs:
   build:
@@ -14,8 +18,21 @@ jobs:
       options: --privileged
 
     steps:
-      - name: Checkout repo
+      - name: Bootstrap container (install git & keyring)
+        run: |
+          pacman -Sy --noconfirm --noprogressbar ca-certificates archlinux-keyring git
+          pacman-key --init || true
+          pacman-key --populate archlinux || true
+
+      - name: Checkout repo (full history so artifacts/tags are meaningful)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git (optional for local operations)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Install dependencies for mkedge
         run: |
@@ -23,14 +40,15 @@ jobs:
           pacman -S --noconfirm \
             arch-install-scripts base-devel git squashfs-tools mtools dosfstools \
             xorriso e2fsprogs erofs-utils libarchive libisoburn gnupg \
-            grub grub-common openssl python-docutils shellcheck bash
+            grub grub-common openssl python-docutils shellcheck
 
       - name: Build ISO with mkedge
         run: |
           chmod +x ./mkedgescript
-          ./mkedgescript --mode 3 --cowspace skip --build --bypass
+          ./mkedgescript --mode 2 --extra --neptune --cowspace skip --build --bypass
           rm -rf work/
           rm -rf airootfs/
+
       - name: Split ISO into 1.9GB chunks
         run: |
           cd out
@@ -45,11 +63,33 @@ jobs:
           name: steamos-edge-iso-parts
           path: out/*.part*
 
-      - name: Upload to GitHub Release
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (so the repo context exists)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts (ISO parts)
+        uses: actions/download-artifact@v4
+        with:
+          name: steamos-edge-iso-parts
+          path: ./out
+
+      - name: Show downloaded files
+        run: |
+          ls -lh out || true
+
+      # Option A: Let softprops create the tag & release for you
+      - name: Create GitHub release and upload assets (auto-create tag)
         uses: softprops/action-gh-release@v1
         with:
           tag_name: "build-${{ github.sha }}"
           name: "SteamOS Edge Build ${{ github.sha }}"
           files: out/*.part*
+          create_tag: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
