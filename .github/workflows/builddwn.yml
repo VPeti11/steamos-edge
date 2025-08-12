@@ -45,7 +45,7 @@ jobs:
       - name: Build ISO with mkedge
         run: |
           chmod +x ./mkedgescript
-          ./mkedgescript --mode 2 --extra --neptune --cowspace skip --build --bypass
+          ./mkedgescript --mode 1 --extra --cowspace skip --build --bypass
           rm -rf work/
           rm -rf airootfs/
 
@@ -83,11 +83,10 @@ jobs:
         run: |
           ls -lh out || true
 
-      # Option A: Let softprops create the tag & release for you
       - name: Create GitHub release and upload assets (auto-create tag)
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "build-${{ github.sha }}"
+          tag_name: "build-downstream-${{ github.sha }}"
           name: "SteamOS Edge Build ${{ github.sha }}"
           files: out/*.part*
           create_tag: true
