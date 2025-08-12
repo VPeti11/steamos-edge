@@ -1,7 +1,7 @@
 name: Build SteamOS Edge ISO Upstream
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # manual trigger
   push:
     branches:
       - main
@@ -9,76 +9,26 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --privileged
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install host dependencies for Arch bootstrap and chroot
+      - name: Install dependencies for mkedge
         run: |
-          sudo apt-get update
-          sudo apt-get install -y rsync zstd
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm \
+            arch-install-scripts base-devel git squashfs-tools mtools dosfstools \
+            xorriso e2fsprogs erofs-utils libarchive libisoburn gnupg \
+            grub grub-common grub-efi-amd64 openssl python-docutils shellcheck
 
-
-      - name: Setup Arch Linux chroot environment
+      - name: Build ISO with mkedge
         run: |
-          set -e
-          sudo mkdir -p /mnt/arch
-
-          ARCH_BASE_URL="https://mirror.rackspace.com/archlinux/iso/latest/archlinux-bootstrap-x86_64.tar.zst"
-          sudo curl -L -o /tmp/archlinux-bootstrap.tar.zst "$ARCH_BASE_URL"
-          sudo zstd -d /tmp/archlinux-bootstrap.tar.zst -c | sudo tar -x -C /mnt/arch --strip-components=1
-
-
-          echo "Extracting Arch Linux bootstrap..."
-          sudo zstd -d /tmp/archlinux-bootstrap.tar.zst -c | sudo tar -x -C /mnt/arch --strip-components=1
-
-          sudo cp /etc/resolv.conf /mnt/arch/etc/resolv.conf
-
-
-          echo "Mounting /dev, /proc, /sys into chroot..."
-          sudo mount --bind /dev /mnt/arch/dev
-          sudo mount --bind /proc /mnt/arch/proc
-          sudo mount --bind /sys /mnt/arch/sys
-
-          sudo chroot /mnt/arch /bin/bash -c '
-          pacman-key --init
-          pacman-key --populate archlinux
-          echo "Server = https://mirror.rackspace.com/archlinux/$repo/os/x86_64" > /etc/pacman.d/mirrorlist
-          pacman -Sy --noconfirm
-          '
-
-
-          echo "Installing mkedge build dependencies inside chroot..."
-          sudo chroot /mnt/arch /bin/bash -c "
-            pacman -S --noconfirm arch-install-scripts base-devel git squashfs-tools mtools dosfstools \
-            xorriso e2fsprogs erofs-utils libarchive libisoburn gnupg grub \
-            openssl python-docutils shellcheck
-          "
-
-      - name: Copy source code to chroot
-        run: |
-          sudo rsync -a --exclude=out ./ /mnt/arch/root/steamos-edge/
-
-      - name: Run mkedge build inside chroot
-        run: |
-          sudo chroot /mnt/arch /bin/bash -c "
-            cd /root/steamos-edge
-            chmod +x ./mkedgescript
-            ./mkedgescript --mode 2 --extra --neptune --cowspace skip --build --bypass
-          "
-
-      - name: Copy ISO output back to workspace
-        run: |
-          sudo rsync -a /mnt/arch/root/steamos-edge/out ./out
-
-      - name: Cleanup chroot mounts
-        if: always()
-        run: |
-          sudo umount /mnt/arch/dev || true
-          sudo umount /mnt/arch/proc || true
-          sudo umount /mnt/arch/sys || true
-          sudo rm -rf /mnt/arch
+          chmod +x ./mkedgescript
+          ./mkedgescript --mode 2 --extra --neptune --cowspace skip --build --bypass
 
       - name: Split ISO into 1.9GB chunks
         run: |
@@ -88,12 +38,17 @@ jobs:
           split -b 1900M "$ISO_FILE" "${ISO_FILE}.part"
           ls -lh
 
+      - name: Upload ISO chunks as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: steamos-edge-iso-parts
+          path: out/*.part*
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: "build-${{ github.sha }}"
           name: "SteamOS Edge Build ${{ github.sha }}"
-          files: |
-            out/*.iso.part*
+          files: out/*.part*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
