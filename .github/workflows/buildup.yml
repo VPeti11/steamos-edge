@@ -42,6 +42,7 @@ jobs:
           sudo chroot /mnt/arch /bin/bash -c "
             pacman-key --init
             pacman-key --populate archlinux
+            echo 'Server = https://mirror.rackspace.com/archlinux/$repo/os/$arch' > /etc/pacman.d/mirrorlist
             pacman -Sy --noconfirm
           "
 
