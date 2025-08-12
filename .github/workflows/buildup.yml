@@ -17,7 +17,8 @@ jobs:
       - name: Install host dependencies for Arch bootstrap and chroot
         run: |
           sudo apt-get update
-          sudo apt-get install -y rsync curl squashfs-tools mtools dosfstools xorriso e2fsprogs erofs-utils libarchive libisoburn gnupg grub python3-docutils shellcheck
+          sudo apt-get install -y rsync
+
 
       - name: Setup Arch Linux chroot environment
         run: |
