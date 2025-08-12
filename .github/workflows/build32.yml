@@ -23,15 +23,14 @@ jobs:
           pacman -S --noconfirm \
             arch-install-scripts base-devel git squashfs-tools mtools dosfstools \
             xorriso e2fsprogs erofs-utils libarchive libisoburn gnupg \
-            grub grub-common openssl python-docutils shellcheck
+            grub grub-common openssl python-docutils shellcheck bash
 
       - name: Build ISO with mkedge
         run: |
           chmod +x ./mkedgescript
-          ./mkedgescript --mode 2 --extra --neptune --cowspace skip --build --bypass
+          ./mkedgescript --mode 3 --cowspace skip --build --bypass
           rm -rf work/
           rm -rf airootfs/
-
       - name: Split ISO into 1.9GB chunks
         run: |
           cd out
