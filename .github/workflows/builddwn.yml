@@ -1,6 +1,8 @@
 name: Build SteamOS Edge ISO Downstream
 
 on:
+  schedule:
+    - cron: "0 7 * * 5"
   workflow_dispatch:
   push:
     branches:
