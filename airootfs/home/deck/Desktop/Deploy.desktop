@@ -1,0 +1,10 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Version=1.0
+Name=Deploy Script
+Comment=Run deployment script with sudo
+Exec=sudo ./Deploy.sh
+Terminal=true
+Icon=dialog-password
+Type=Application
+Categories=System;
