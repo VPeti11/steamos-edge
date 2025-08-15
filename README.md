@@ -136,12 +136,15 @@ If it boots an Arch ISO, it can likely boot this. Or not. Depends. And with the 
 
 ---
 
-## Advanced: Flash to HDD
+## How to install to HDD?
 
-While SteamOS Edge is meant to run off a DVD or a flash drive it is possible to flash the image to an internal drive either by
+If you want to install SteamOS Edge to your HDD just run `sudo edge-deploy`. Or if you want a mutable distro run `sudo edge-deploy-exp`
 
-* Using DD to flash the iso to the HDD by booting into a liveboot image from a USB containing the ISO and using the command `sudo dd if=SteamOS_Edge_Stable_something.iso of=/dev/sda status=progress` (replace /dev/sda with the actual drive path)
-* Use ether or a software like that and mount the HDD then flash the ISO (you need to format the rest of the partition)
+---
+
+## How to update system?
+
+Run `sudo steamos_edge_update`
 
 ---
 

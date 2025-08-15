@@ -1,15 +1,4 @@
 #!/bin/bash
-#  SPDX-License-Identifier: LGPL-2.1+
-#
-#  Copyright © 2025 EdgeDev.
-#
-#  This file is part of SteamOS Edge.
-#
-#  steamos-edge is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU Lesser General Public License as
-#  published by the Free Software Foundation; either version 2.1 of the License,
-#  or (at your option) any later version.
-
 if [[ $EUID -ne 0 ]]; then
     echo "This script must be run as root. Use sudo!"
     exit 1
@@ -29,8 +18,6 @@ else
     echo "Unknown architecture: $arch"
 fi
 
-# Thanks Quota!
-# https://discord.com/channels/1338559346853810238/1338559346853810241/1338995791443918908
 pacman -Syu
 echo "Installed packages"
 cd /
