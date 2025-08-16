@@ -157,6 +157,13 @@ func main() {
 		if *extraFlag || (*modeFlag == 0 && ask(reader, "Do you want to add extra packages? (y/n): ")) {
 			appendExtraPackagesdwn()
 		}
+		if *neptuneFlag || (*modeFlag == 0 && ask(reader, "Do you want the Neptune kernel? (y/n): ")) {
+			appendToFile("packages.x86_64", []string{"linux-neptune"})
+			appendToFile("packages.x86_64", []string{"linux-firmware-neptune"})
+			appendToFile("packages.x86_64", []string{"steamdeck-dsp"})
+		} else {
+			appendToFile("packages.x86_64", []string{"linux-firmware"})
+		}
 		copyFileMust("./mkedge/helper.sh", "./helper.sh")
 
 	case 2:
@@ -167,7 +174,7 @@ func main() {
 			appendExtraPackages()
 		}
 		if *neptuneFlag || (*modeFlag == 0 && ask(reader, "Do you want the Neptune kernel? (y/n): ")) {
-			appendNeptuneKernel()
+			appendToFile("packages.x86_64", []string{"linux-firmware-valve"})
 		}
 		copyFileMust("./mkedge/helper.sh", "./helper.sh")
 
@@ -326,10 +333,6 @@ func appendExtraPackagesdwn() {
 		"protonup-qt-bin",
 	}
 	appendToFile("packages.x86_64", extras)
-}
-
-func appendNeptuneKernel() {
-	appendToFile("packages.x86_64", []string{"linux-firmware-valve"})
 }
 
 func appendToFile(filename string, lines []string) {
