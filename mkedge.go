@@ -164,7 +164,6 @@ func main() {
 		} else {
 			appendToFile("packages.x86_64", []string{"linux-firmware"})
 		}
-		copyFileMust("./mkedge/helper.sh", "./helper.sh")
 		copyFileMust("./mkedge/cust_64.sh", "./airootfs/root/customize_airootfs.sh")
 
 	case 2:
@@ -177,19 +176,19 @@ func main() {
 		if *neptuneFlag || (*modeFlag == 0 && ask(reader, "Do you want the Neptune kernel? (y/n): ")) {
 			appendToFile("packages.x86_64", []string{"linux-firmware-valve"})
 		}
-		copyFileMust("./mkedge/helper.sh", "./helper.sh")
 		copyFileMust("./mkedge/cust_64.sh", "./airootfs/root/customize_airootfs.sh")
 
 	case 3:
 		zipName = "boot32.zip"
 		copyFileMust("./mkedge/packages.i686.base", "./packages.i686")
 		copyFileMust("./mkedge/32.sh", "./profiledef.sh")
-		copyFileMust("./mkedge/helper32.sh", "./helper.sh")
 		copyFileMust("./mkedge/cust_32.sh", "./airootfs/root/customize_airootfs.sh")
 	default:
 		printFancy("Invalid mode.")
 		os.Exit(1)
 	}
+
+	copyFileMust("./mkedge/helper.sh", "./helper.sh")
 
 	// --- Configure repos ---
 	if err := configureRepos(mode); err != nil {
@@ -234,7 +233,7 @@ func main() {
 	// --- Install dependencies ---
 	if !*bypassFlag {
 
-		installDeps := exec.Command("sudo", "pacman", "-S", "--noconfirm", "--needed",
+		installDeps := exec.Command("sudo", "pacman", "-Sy", "--noconfirm", "--needed",
 			"arch-install-scripts", "base-devel", "git", "squashfs-tools", "mtools", "dosfstools",
 			"xorriso", "e2fsprogs", "erofs-utils", "libarchive", "libisoburn", "gnupg",
 			"grub", "openssl", "python-docutils", "shellcheck")
