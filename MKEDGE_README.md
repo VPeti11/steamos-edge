@@ -8,7 +8,7 @@ MKEDGE is a build automation tool designed for SteamOS Edge that prepares and bu
 
 * Supports 3 repository modes: Downstream, Upstream, and 32-bit.
 * Optionally add extra packages.
-* Supports Neptune kernel selection (Upstream mode only).
+* Supports Neptune kernel selection (64 bit mode only).
 * Customizable CoW space size.
 * Bypass system checks if needed.
 * Cleanup existing build folders.

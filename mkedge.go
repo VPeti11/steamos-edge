@@ -165,6 +165,7 @@ func main() {
 			appendToFile("packages.x86_64", []string{"linux-firmware"})
 		}
 		copyFileMust("./mkedge/helper.sh", "./helper.sh")
+		copyFileMust("./mkedge/cust_64.sh", "./airootfs/root/customize_airootfs.sh")
 
 	case 2:
 		zipName = "boot64.zip"
@@ -177,12 +178,14 @@ func main() {
 			appendToFile("packages.x86_64", []string{"linux-firmware-valve"})
 		}
 		copyFileMust("./mkedge/helper.sh", "./helper.sh")
+		copyFileMust("./mkedge/cust_64.sh", "./airootfs/root/customize_airootfs.sh")
 
 	case 3:
 		zipName = "boot32.zip"
 		copyFileMust("./mkedge/packages.i686.base", "./packages.i686")
 		copyFileMust("./mkedge/32.sh", "./profiledef.sh")
 		copyFileMust("./mkedge/helper32.sh", "./helper.sh")
+		copyFileMust("./mkedge/cust_32.sh", "./airootfs/root/customize_airootfs.sh")
 	default:
 		printFancy("Invalid mode.")
 		os.Exit(1)

@@ -2,7 +2,7 @@
 # shellcheck disable=SC2034
 
 iso_name="SteamOS_Edge_i686"
-iso_label="steamos-edge_exp_i686"
+iso_label="steamos-edge_i686"
 iso_publisher="EdgeDev Group <https://gitlab.com/edgedev1>"
 iso_application="SteamOS Edge image"
 iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"
