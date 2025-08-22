@@ -186,3 +186,44 @@ xorg-xhost
 zenity
 zip
 zsh
+
+# Display Manager
+sddm
+sddm-kcm
+
+# Calamares make dependencies
+dmidecode
+doxygen
+extra-cmake-modules
+gawk
+kconfig
+kcoreaddons
+ki18n
+kparts
+kpmcore
+kservice
+kwidgetsaddons
+libatasmart
+libplasma
+libpwquality
+polkit-qt6
+pybind11
+python-jsonschema
+python-pyaml
+python-unidecode
+qt6-declarative
+qt6-svg
+qt6-tools
+qt6-virtualkeyboard
+qt6-webengine
+solid
+yaml-cpp
+
+# Calamares dependencies
+calamares
+ckbcomp
+mkinitcpio-openswap
+
+# AUR
+downgrade
+trizen
