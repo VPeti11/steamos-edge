@@ -37,6 +37,7 @@ func main() {
 	cowspaceFlag := flag.String("cowspace", "", "Set cowspace size (default 2G). Use 'skip' to skip changing it")
 	bypassFlag := flag.Bool("bypass", false, "Bypass pacman/root checks")
 	cleanupFlag := flag.Bool("cleanup", false, "Starts from scratch")
+	liteFlag := flag.Bool("lite", false, "Lite mode")
 	helpFlag := flag.Bool("help", false, "Show this help menu")
 	flag.Parse()
 
@@ -213,6 +214,53 @@ func main() {
 		replaceCowspaceFlag(*cowspaceFlag)
 	} else {
 		replaceCowspacePrompt(reader)
+	}
+
+	if *liteFlag {
+		handleLite(mode)
+	} else {
+		airootfsfile := "./airootfs/root/customize_airootfs.sh"
+		if mode == 1 || mode == 2 {
+
+			f, err := os.OpenFile(airootfsfile, os.O_APPEND|os.O_WRONLY, 0644)
+			if err != nil {
+				fmt.Println("Error opening customize_airootfs.sh:", err)
+				return
+			}
+			defer f.Close()
+
+			commands := `
+		# Add Plasma Wayland autostart
+		sudo bash -c 'cat > /home/deck/.bash_profile <<EOF
+		if [[ -z $WAYLAND_DISPLAY && $XDG_VTNR -eq 1 ]]; then
+		  exec dbus-run-session startplasma-wayland
+		fi
+		EOF'
+		`
+			_, err = f.WriteString(commands)
+			if err != nil {
+				fmt.Println("Error writing to customize_airootfs.sh:", err)
+				return
+			}
+		} else {
+
+			f, err := os.OpenFile(airootfsfile, os.O_APPEND|os.O_WRONLY, 0644)
+			if err != nil {
+				fmt.Println("Error opening customize_airootfs.sh:", err)
+				return
+			}
+			defer f.Close()
+
+			command := `
+# Enable SDDM display manager
+systemctl enable sddm
+`
+			_, err = f.WriteString(command)
+			if err != nil {
+				fmt.Println("Error writing to customize_airootfs.sh:", err)
+				return
+			}
+		}
 	}
 
 	clearScreen()
@@ -550,4 +598,95 @@ func checkInternet() bool {
 	cmd = exec.Command("ping", "-c", "5", "1.1.1.1")
 	err := cmd.Run()
 	return err == nil
+}
+
+func readLines(filename string) ([]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
+}
+
+func writeLines(filename string, lines []string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	w := bufio.NewWriter(file)
+	for _, line := range lines {
+		fmt.Fprintln(w, line)
+	}
+	return w.Flush()
+}
+
+func handleLite(mode int) {
+
+	var pkgFile string
+	if mode == 1 || mode == 2 {
+		pkgFile = "packages.x86_64"
+	} else if mode == 3 {
+		pkgFile = "packages.i686"
+	} else {
+		fmt.Println("Invalid mode")
+		return
+	}
+
+	lines, err := readLines(pkgFile)
+	if err != nil {
+		fmt.Println("Error reading package file:", err)
+		return
+	}
+
+	var newLines []string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "plasma") {
+			continue
+		}
+		newLines = append(newLines, line)
+	}
+
+	newLines = append(newLines, "lxqt", "xorg", "xorg-xinit", "xterm")
+
+	err = writeLines(pkgFile, newLines)
+	if err != nil {
+		fmt.Println("Error writing package file:", err)
+		return
+	}
+
+	customFile := "./airootfs/root/customize_airootfs.sh"
+	f, err := os.OpenFile(customFile, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Println("Error opening customize_airootfs.sh:", err)
+		return
+	}
+	defer f.Close()
+
+	commands := `
+cat > /home/deck/.xinitrc <<EOF
+exec startlxqt
+EOF
+
+sudo bash -c 'cat > /home/deck/.bash_profile <<EOF
+if [[ -z $WAYLAND_DISPLAY && $XDG_VTNR -eq 1 ]]; then
+  exec startx
+fi
+EOF'
+`
+	_, err = f.WriteString(commands)
+	if err != nil {
+		fmt.Println("Error writing to customize_airootfs.sh:", err)
+		return
+	}
+
+	printFancy("Lite mode enabled successfully.")
 }

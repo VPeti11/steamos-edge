@@ -1,4 +1,4 @@
-name: Build SteamOS Edge ISO Downstream
+name: Build SteamOS Edge ISO lite
 
 on:
   schedule:
@@ -47,7 +47,7 @@ jobs:
       - name: Build ISO with mkedge
         run: |
           chmod +x ./mkedgescript
-          ./mkedgescript --mode 1 --extra --neptune --cowspace skip --build --bypass
+          ./mkedgescript --mode 1 --extra --neptune --cowspace skip --build --bypass --lite
           rm -rf work/
           rm -rf airootfs/
 
@@ -88,8 +88,8 @@ jobs:
       - name: Create GitHub release and upload assets (auto-create tag)
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "build-downstream-${{ github.run_id }}"
-          name: "SteamOS Edge Downstream Build run-${{ github.run_number }} (id ${{ github.run_id }})"
+          tag_name: "build-litedwn-${{ github.run_id }}"
+          name: "SteamOS Edge Lite Build run-${{ github.run_number }} (id ${{ github.run_id }})"
           files: out/*.part*
           create_tag: true
         env:

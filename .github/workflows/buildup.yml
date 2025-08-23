@@ -89,7 +89,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: "build-upstream-${{ github.run_id }}"
-          name: "SteamOS Edge Build run-${{ github.run_number }} (id ${{ github.run_id }})"
+          name: "SteamOS Edge Upstream Build run-${{ github.run_number }} (id ${{ github.run_id }})"
           files: out/*.part*
           create_tag: true
         env:

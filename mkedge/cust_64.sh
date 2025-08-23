@@ -14,11 +14,6 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin deck --noclear %I \$TERM
 EOF'
 sudo systemctl enable getty@tty1
-sudo bash -c 'cat > /home/deck/.bash_profile <<EOF
-if [[ -z \$WAYLAND_DISPLAY && \$XDG_VTNR -eq 1 ]]; then
-  exec dbus-run-session startplasma-wayland
-fi
-EOF'
 sudo chown deck:deck /home/deck/.bash_profile
 sudo getent group wheel || sudo groupadd wheel
 sudo usermod -aG wheel deck
@@ -33,3 +28,16 @@ sudo sed -i -E 's/^\s*SigLevel\s*=\s*Required\s+DatabaseOptional\s*/SigLevel = N
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 ln -sf /usr/share/zoneinfo/UTC /etc/localtime
 systemctl enable auto-sync-time.service
+cat >> /etc/pacman.conf << EOF
+
+[edge-repo]
+SigLevel = Required DatabaseOptional
+Server = https://gitlab.com/edgedev1/edge-repo/-/raw/master/x86_64/
+EOF
+
+curl -fsSL https://gitlab.com/edgedev1/edge-repo/-/raw/master/pub.asc | gpg --dearmor -o /etc/pacman.d/gnupg/edge-repo-pub.gpg
+sudo pacman-key --add /etc/pacman.d/gnupg/edge-repo-pub.gpg
+sudo pacman-key --lsign-key 53407B947EBAD024A4645885A139E9B289DC7527
+sudo pacman -Syy
+chmod +x /usr/local/bin/*
+chmod +x /usr/bin/*
