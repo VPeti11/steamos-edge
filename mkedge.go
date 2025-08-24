@@ -38,6 +38,7 @@ func main() {
 	bypassFlag := flag.Bool("bypass", false, "Bypass pacman/root checks")
 	cleanupFlag := flag.Bool("cleanup", false, "Starts from scratch")
 	liteFlag := flag.Bool("lite", false, "Lite mode")
+	stagingFlag := flag.Bool("staging", false, "Use staging edge-repo")
 	helpFlag := flag.Bool("help", false, "Show this help menu")
 	flag.Parse()
 
@@ -149,6 +150,12 @@ func main() {
 		}
 	}
 
+	// --- Configure repos ---
+	if err := configureRepos(mode); err != nil {
+		printFancy("Error configuring repos")
+		os.Exit(1)
+	}
+
 	var zipName string
 	switch mode {
 	case 1:
@@ -166,6 +173,9 @@ func main() {
 			appendToFile("packages.x86_64", []string{"linux-firmware"})
 		}
 		copyFileMust("./mkedge/cust_64.sh", "./airootfs/root/customize_airootfs.sh")
+		clearScreen()
+		printFancy("(Not recommended)")
+		handleStaging(*stagingFlag, *modeFlag)
 
 	case 2:
 		zipName = "boot64.zip"
@@ -178,6 +188,9 @@ func main() {
 			appendToFile("packages.x86_64", []string{"linux-firmware-valve"})
 		}
 		copyFileMust("./mkedge/cust_64.sh", "./airootfs/root/customize_airootfs.sh")
+		clearScreen()
+		printFancy("(Recommended)")
+		handleStaging(*stagingFlag, *modeFlag)
 
 	case 3:
 		zipName = "boot32.zip"
@@ -190,12 +203,6 @@ func main() {
 	}
 
 	copyFileMust("./mkedge/helper.sh", "./helper.sh")
-
-	// --- Configure repos ---
-	if err := configureRepos(mode); err != nil {
-		printFancy("Error configuring repos")
-		os.Exit(1)
-	}
 
 	clearScreen()
 
@@ -555,6 +562,7 @@ func cleanup() {
 	os.Remove("helper.sh")
 	os.Remove("pacman.conf")
 	os.Remove("profiledef.sh")
+	os.Remove("./airootfs/root/customize_airootfs.sh")
 }
 
 func checkInternet() bool {
@@ -711,4 +719,56 @@ func RemoveMagicBrackets(filePath string) error {
 	}
 
 	return nil
+}
+
+func handleStaging(stagingFlag bool, modeFlag int) {
+	reader := bufio.NewReader(os.Stdin)
+	stage := stagingFlag
+	if modeFlag == 0 {
+		if stage == false {
+			stage = ask(reader, "Do you want to use staging repos? (y/n): ")
+		}
+	}
+
+	if !stage {
+		block := []string{
+			"[edge-repo]",
+			"SigLevel = Required DatabaseOptional",
+			"Server = https://gitlab.com/edgedev1/edge-repo/-/raw/master/x86_64/",
+			"Server = https://github.com/VPeti11/edge-repo/raw/refs/heads/master/x86_64/",
+		}
+
+		appendToFile("pacman.conf", block)
+
+		heredoc := []string{
+			`cat >> /etc/pacman.conf << EOF`,
+			``,
+			`[edge-repo]`,
+			`SigLevel = Required DatabaseOptional`,
+			"Server = https://gitlab.com/edgedev1/edge-repo/-/raw/master/x86_64/",
+			`Server = https://github.com/VPeti11/edge-repo/raw/refs/heads/master/x86_64/`,
+			`EOF`,
+		}
+
+		appendToFile("./airootfs/root/customize_airootfs.sh", heredoc)
+	} else {
+		block := []string{
+			"[edge-repo]",
+			"SigLevel = Required DatabaseOptional",
+			"Server = https://github.com/VPeti11/edge-repo/raw/refs/heads/staging/x86_64/",
+		}
+
+		appendToFile("pacman.conf", block)
+
+		heredoc := []string{
+			`cat >> /etc/pacman.conf << EOF`,
+			``,
+			`[edge-repo]`,
+			`SigLevel = Required DatabaseOptional`,
+			`Server = https://github.com/VPeti11/edge-repo/raw/refs/heads/staging/x86_64/`,
+			`EOF`,
+		}
+
+		appendToFile("./airootfs/root/customize_airootfs.sh", heredoc)
+	}
 }

@@ -47,7 +47,8 @@ It is designed as a replacement for the `mkarchiso -v ./` workflow, making **Ste
 | `--cowspace` | Set CoW space size (e.g. `2G`) or `skip` to skip          | Defaults to 2G if omitted                                          |
 | `--bypass`   | Bypass pacman/root/internet checks                        | Use with caution                                                   |
 | `--cleanup`  | Remove build folders and files, then exit                 | Skips normal execution                                             |
-| `--help`     | Show help menu                                            | Shows usage and exits                                              |
+| `--help`     | Show help menu                                            | Shows usage and exits     
+| `--staging`     | Use staging edge-repo                                            | Use staging edge-repo                                           |
 
 ---
 
