@@ -9,6 +9,16 @@ This project builds on the original SteamOS leak and adds Arch-based tooling, ex
 SteamOS Edge is a fixed and modernized version of the SteamOS 3 source leak. This project is **WORK IN PROGRESS**  expect bugs!
 Currently the **32-bit build** is less stable, while **x86\_64 builds are stable**.
 
+## Builds
+
+[![SteamOS Edge Upstream](https://github.com/VPeti11/steamos-edge/actions/workflows/buildup.yml/badge.svg)](https://github.com/VPeti11/steamos-edge/actions/workflows/buildup.yml)
+
+[![SteamOS Edge Downstream](https://github.com/VPeti11/steamos-edge/actions/workflows/builddwn.yml/badge.svg)](https://github.com/VPeti11/steamos-edge/actions/workflows/builddwn.yml)
+
+[![SteamOS Edge 32](https://github.com/VPeti11/steamos-edge/actions/workflows/build32.yml/badge.svg)](https://github.com/VPeti11/steamos-edge/actions/workflows/build32.yml)
+
+[![SteamOS Edge Lite](https://github.com/VPeti11/steamos-edge/actions/workflows/buildlite.yml/badge.svg)](https://github.com/VPeti11/steamos-edge/actions/workflows/buildlite.yml)
+
 ---
 
 ## Key Features
