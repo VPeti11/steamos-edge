@@ -54,7 +54,7 @@ jobs:
       - name: Build ISO with mkedge
         run: |
           chmod +x ./mkedgescript
-          ./mkedgescript --mode 1 --cowspace skip --build --bypass --lite
+          ./mkedgescript --mode 1 --cowspace skip --build --bypass --lite --staging
           rm -rf work/
           rm -rf airootfs/
 
