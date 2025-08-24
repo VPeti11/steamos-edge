@@ -813,11 +813,21 @@ func handleStaging(stagingFlag bool, modeFlag int, extraEnable bool, amode int) 
 		appendToFile("./airootfs/root/customize_airootfs.sh", heredoc)
 	}
 
-	if extraEnable {
-		if amode == 1 {
-			appendExtraPackagesdwnstage()
-		} else {
-			appendExtraPackagesstage()
+	if !stage {
+		if extraEnable {
+			if amode == 1 {
+				appendExtraPackagesdwn()
+			} else {
+				appendExtraPackages()
+			}
+		}
+	} else {
+		if extraEnable {
+			if amode == 1 {
+				appendExtraPackagesdwnstage()
+			} else {
+				appendExtraPackagesstage()
+			}
 		}
 	}
 }
