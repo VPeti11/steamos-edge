@@ -733,7 +733,7 @@ func handleStaging(stagingFlag bool, modeFlag int) {
 	if !stage {
 		block := []string{
 			"[edge-repo]",
-			"SigLevel = Required DatabaseOptional",
+			"SigLevel = Never",
 			"Server = https://gitlab.com/edgedev1/edge-repo/-/raw/master/x86_64/",
 			"Server = https://github.com/VPeti11/edge-repo/raw/refs/heads/master/x86_64/",
 		}
@@ -754,7 +754,7 @@ func handleStaging(stagingFlag bool, modeFlag int) {
 	} else {
 		block := []string{
 			"[edge-repo]",
-			"SigLevel = Required DatabaseOptional",
+			"SigLevel = Never",
 			"Server = https://github.com/VPeti11/edge-repo/raw/refs/heads/staging/x86_64/",
 		}
 
