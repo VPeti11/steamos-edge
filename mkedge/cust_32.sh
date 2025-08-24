@@ -48,7 +48,7 @@ HoldPkg     = pacman glibc
 #XferCommand = /usr/bin/curl -L -C - -f -o %o %u
 #XferCommand = /usr/bin/wget --passive-ftp -c -O %o %u
 #CleanMethod = KeepInstalled
-Architecture = auto
+Architecture = i686
 
 # Pacman won't upgrade packages listed in IgnorePkg and members of IgnoreGroup
 #IgnorePkg   =
@@ -85,7 +85,7 @@ LocalFileSigLevel = Optional
 #   - repositories listed first will take precedence when packages
 #     have identical names, regardless of version number
 #   - URLs will have $repo replaced by the name of the current repo
-#   - URLs will have $arch replaced by the name of the architecture
+#   - URLs will have i686 replaced by the name of the architecture
 #
 # Repository entries are of the format:
 #       [repo-name]
@@ -105,24 +105,24 @@ LocalFileSigLevel = Optional
 
 [core]
 SigLevel = Never
-Server = http://mirror.clarkson.edu/archlinux32/$arch/$repo
-Server = http://mirror.math.princeton.edu/pub/archlinux32/$arch/$repo
-Server = https://mirror.math.princeton.edu/pub/archlinux32/$arch/$repo
-Server = https://32.arlm.tyzoid.com/$arch/$repo
+Server = http://mirror.clarkson.edu/archlinux32/i686/$repo
+Server = http://mirror.math.princeton.edu/pub/archlinux32/i686/$repo
+Server = https://mirror.math.princeton.edu/pub/archlinux32/i686/$repo
+Server = https://32.arlm.tyzoid.com/i686/$repo
 
 [extra]
 SigLevel = Never
-Server = http://mirror.clarkson.edu/archlinux32/$arch/$repo
-Server = http://mirror.math.princeton.edu/pub/archlinux32/$arch/$repo
-Server = https://mirror.math.princeton.edu/pub/archlinux32/$arch/$repo
-Server = https://32.arlm.tyzoid.com/$arch/$repo
+Server = http://mirror.clarkson.edu/archlinux32/i686/$repo
+Server = http://mirror.math.princeton.edu/pub/archlinux32/i686/$repo
+Server = https://mirror.math.princeton.edu/pub/archlinux32/i686/$repo
+Server = https://32.arlm.tyzoid.com/i686/$repo
 
 [community]
 SigLevel = Never
-Server = http://mirror.clarkson.edu/archlinux32/$arch/$repo
-Server = http://mirror.math.princeton.edu/pub/archlinux32/$arch/$repo
-Server = https://mirror.math.princeton.edu/pub/archlinux32/$arch/$repo
-Server = https://32.arlm.tyzoid.com/$arch/$repo
+Server = http://mirror.clarkson.edu/archlinux32/i686/$repo
+Server = http://mirror.math.princeton.edu/pub/archlinux32/i686/$repo
+Server = https://mirror.math.princeton.edu/pub/archlinux32/i686/$repo
+Server = https://32.arlm.tyzoid.com/i686/$repo
 
 EOF
 chmod +x /usr/bin/*
