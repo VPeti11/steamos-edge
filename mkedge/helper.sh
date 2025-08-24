@@ -2082,6 +2082,6 @@ _read_profile
 _set_overrides
 _validate_options
 _build
-ehco "MKEDGE COMPLETE"
+echo "MKEDGE COMPLETE"
 
 # vim:ts=4:sw=4:et:
