@@ -156,6 +156,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	var extraEnable bool
 	var zipName string
 	switch mode {
 	case 1:
@@ -163,7 +164,7 @@ func main() {
 		copyFileMust("./mkedge/packages.x86_64.base", "./packages.x86_64")
 		copyFileMust("./mkedge/64dwn.sh", "./profiledef.sh")
 		if *extraFlag || (*modeFlag == 0 && ask(reader, "Do you want to add extra packages? (y/n): ")) {
-			appendExtraPackagesdwn()
+			extraEnable = true
 		}
 		if *neptuneFlag || (*modeFlag == 0 && ask(reader, "Do you want the Neptune kernel? (y/n): ")) {
 			appendToFile("packages.x86_64", []string{"linux-neptune"})
@@ -175,14 +176,14 @@ func main() {
 		copyFileMust("./mkedge/cust_64.sh", "./airootfs/root/customize_airootfs.sh")
 		clearScreen()
 		printFancy("(Not recommended)")
-		handleStaging(*stagingFlag, *modeFlag)
+		handleStaging(*stagingFlag, *modeFlag, extraEnable, mode)
 
 	case 2:
 		zipName = "boot64.zip"
 		copyFileMust("./mkedge/packages.x86_64.base", "./packages.x86_64")
 		copyFileMust("./mkedge/64.sh", "./profiledef.sh")
 		if *extraFlag || (*modeFlag == 0 && ask(reader, "Do you want to add extra packages? (y/n): ")) {
-			appendExtraPackages()
+			extraEnable = true
 		}
 		if *neptuneFlag || (*modeFlag == 0 && ask(reader, "Do you want the Neptune kernel? (y/n): ")) {
 			appendToFile("packages.x86_64", []string{"linux-firmware-valve"})
@@ -190,7 +191,7 @@ func main() {
 		copyFileMust("./mkedge/cust_64.sh", "./airootfs/root/customize_airootfs.sh")
 		clearScreen()
 		printFancy("(Recommended)")
-		handleStaging(*stagingFlag, *modeFlag)
+		handleStaging(*stagingFlag, *modeFlag, extraEnable, mode)
 
 	case 3:
 		zipName = "boot32.zip"
@@ -337,6 +338,27 @@ func appendExtraPackages() {
 	appendToFile("packages.x86_64", extras)
 }
 
+func appendExtraPackagesstage() {
+	extras := []string{
+		"prismlauncher",
+		"lutris-git",
+		"opengamepadui-bin",
+		"bottles",
+		"gzdoom-bin",
+		"yay-bin",
+		"antimicrox-git",
+		"balena-etcher",
+		"coolercontrol-bin",
+		"betterdiscord-installer-bin",
+		"moonlight-qt-bin",
+		"peazip-qt-bin",
+		"polychromatic-git",
+		"protonup-qt-bin",
+		"sunshine-bin",
+	}
+	appendToFile("packages.x86_64", extras)
+}
+
 func appendExtraPackagesdwn() {
 	extras := []string{
 		"prismlauncher",
@@ -344,6 +366,25 @@ func appendExtraPackagesdwn() {
 		"opengamepadui-bin",
 		"bottles",
 		"gzdoom",
+		"yay-bin",
+		"antimicrox-git",
+		"coolercontrol-bin",
+		"betterdiscord-installer-bin",
+		"moonlight-qt-bin",
+		"peazip-qt-bin",
+		"polychromatic-git",
+		"protonup-qt-bin",
+	}
+	appendToFile("packages.x86_64", extras)
+}
+
+func appendExtraPackagesdwnstage() {
+	extras := []string{
+		"prismlauncher",
+		"lutris-git",
+		"opengamepadui-bin",
+		"bottles",
+		"gzdoom-bin",
 		"yay-bin",
 		"antimicrox-git",
 		"coolercontrol-bin",
@@ -721,7 +762,7 @@ func RemoveMagicBrackets(filePath string) error {
 	return nil
 }
 
-func handleStaging(stagingFlag bool, modeFlag int) {
+func handleStaging(stagingFlag bool, modeFlag int, extraEnable bool, amode int) {
 	reader := bufio.NewReader(os.Stdin)
 	stage := stagingFlag
 	if modeFlag == 0 {
@@ -770,5 +811,13 @@ func handleStaging(stagingFlag bool, modeFlag int) {
 		}
 
 		appendToFile("./airootfs/root/customize_airootfs.sh", heredoc)
+	}
+
+	if extraEnable {
+		if amode == 1 {
+			appendExtraPackagesdwnstage()
+		} else {
+			appendExtraPackagesstage()
+		}
 	}
 }
