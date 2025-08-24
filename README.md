@@ -1,12 +1,13 @@
 # SteamOS Edge
 
-**SteamOS Edge** is a modded version of the leaked 2025 SteamOS base, built for broader hardware compatibility and packed with community-driven gaming features. It provides a persistent liveboot experience designed for general x86 hardware, not just the Steam Deck with added packages, driver tweaks, and customization options.
+**SteamOS Edge** is a modded version of the leaked 2025 SteamOS base, built for broader hardware compatibility and packed with community-driven gaming features. It provides a persistent liveboot experience designed for general x86 hardware, not just the Steam Deck  with added packages, driver tweaks, and customization options.
 
-This project builds on the original SteamOS leak and adds Arch-based tooling, extended package support, and an extensible ISO creation system using ArchISO and `mkedgescript`. While building the image yourself is recommended ISO files can be found in the Discord
+This project builds on the original SteamOS leak and adds Arch-based tooling, extended package support, and an extensible ISO creation system using ArchISO and the **MKEDGE tool**. While building the image yourself is recommended, ISO files can be found in the Discord.
 
 ***In short:***
 
-SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. This project is **WORK IN PROGRESS** expect bugs! However most issues are now with the 32 bit build since the others are now stable builds. 
+SteamOS Edge is a fixed and modernized version of the SteamOS 3 source leak. This project is **WORK IN PROGRESS**  expect bugs!
+Currently the **32-bit build** is less stable, while **x86\_64 builds are stable**.
 
 ---
 
@@ -14,11 +15,13 @@ SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. This proj
 
 * Persistent **liveboot ISO** built on Arch Linux tools
 * Based on the 2025 **SteamOS leak** (forked and extended)
-* Hardware support for generic x86\_64 devices (not limited to Steam Deck)
+* Hardware support for generic **x86\_64** devices (not limited to Steam Deck)
+* **32-bit build mode** available
 * Optional [**Neptune kernel**](https://aur.archlinux.org/packages/linux-firmware-valve)
-* Optional extra packages: PrismLauncher, Lutris, Bottles, GZDoom, yay, and more
+* Optional extra packages: PrismLauncher, Lutris, Bottles, GZDoom, yay, Sunshine, and more
+* Lite mode with **LXQt instead of KDE Plasma**
 * Easily extendable with your own packages during ISO creation
-* Generated using a custom Go script: `./mkedgescript`
+* Generated using the custom Go tool: `mkedge`
 
 ---
 
@@ -27,130 +30,179 @@ SteamOS Edge is a and fixed version of the SteamOS 3 source code leak. This proj
 This repo contains:
 
 * A complete **ArchISO build layout** for creating SteamOS Edge images
-* Configuration files: modified pacman.conf, packages list, overlays and a lot more
-* A **Go-based ISO generation script** (`mkedgescript`) that automates build config and execution
-* Optional kernel and package enhancements (To make it actually work)
+* Modified configuration files: pacman.conf, packages lists, overlays, etc.
+* **MKEDGE**: a Go-based ISO build and management tool
+* Scripts for **install**, **update**, and **deployment**
+* Optional kernel and package enhancements to make the system actually work
 
 ---
 
 ## Installation & ISO Creation
 
-SteamOS Edge is designed to be built on Arch Linux or Arch-based systems. It will not work out-of-the-box on Debian, Fedora, etc. But you can use [Distrobox](https://github.com/89luca89/distrobox)
+SteamOS Edge must be built on **Arch Linux** or an Arch-based system.
+It will not work natively on Debian, Fedora, etc. You can, however, build inside a [Distrobox](https://github.com/89luca89/distrobox) or a privileged Arch Docker container.
 
-### 1. Run the ISO Build Script
+### 1. Build with MKEDGE
 
-Make the script executable if it isn't already:
-
-```
-chmod +x ./mkedgescript
-```
-
-Then launch the script:
+Make the tool executable:
 
 ```
-./mkedgescript
+chmod +x ./mkedge
 ```
 
-### 2. Script Workflow
+Then run:
 
-The script will guide you through a few choices:
+```
+./mkedge
+```
 
-* **Upstream or Downstream repos** – choose Valve’s original or the Arch ones
-* **Extra packages** – add optional gaming tools like Lutris, PrismLauncher, etc.
-* **Kernel options** – optionally include Neptune (Valve’s Steam Deck kernel)
-* **CoWspace size** - adjust the copy-on-write tmpfs size
-* **Build confirmation** – proceed to image creation or exit
+---
 
-Once confirmed, the script:
+### 2. MKEDGE Options
 
-* Installs required build tools using pacman
-* Sets up the ArchISO directory structure
-* Copies and modifies config files
-* Runs `helper.sh` to create a working persistent liveboot ISO
+MKEDGE accepts both **interactive input** and **command-line flags**.
 
-3. What Happens Behind the Scenes
+Available flags:
 
-Once confirmed, the script will:
+```
+--mode        Repository mode: 1=Downstream, 2=Upstream, 3=32-bit
+--extra       Add extra packages (modes 1,2 only)
+--neptune     Use Neptune kernel (mode 2 only)
+--build       Build the image after setup
+--cowspace    Set cowspace size (default 2G, use 'skip' to skip)
+--lite        Enable Lite mode (LXQt instead of Plasma)
+--cleanup     Wipe previous ./work and build artifacts
+--bypass      Bypass checks (root, pacman, internet)
+--help        Show help menu
+```
 
-    Install all required build tools with pacman
+If no flags are given, MKEDGE runs interactively, prompting you for choices.
 
-    Set up the ArchISO workspace and directory structure
+---
 
-    Copy in all modified configs (pacman.conf, package lists, overlays, etc.)
+### 3. Script Workflow
 
-    Call helper.sh to assemble the persistent liveboot ISO
+Depending on your selections, MKEDGE will:
 
-At the end, the script outputs:
-SteamOS_Edge_Stable_Upstream/Downstream + build date + x86_64 or SteamOS_Edge_i686 + build date + i686
+1. **Validate environment**
 
-For more info about MKEDGE read the [MKEDGE README](MKEDGE_README.md)
+   * Checks root, pacman, internet (unless `--bypass` is set)
+   * Installs required packages with pacman (arch-install-scripts, base-devel, git, grub, squashfs-tools, etc.)
+
+2. **Repository setup**
+
+   * Copies the correct repo config (`downstream.conf`, `upstream.conf`, or `32.conf`) into pacman.conf
+
+3. **Mode selection**
+
+   * **Downstream (1)** → Community-maintained repos
+   * **Upstream (2)** → Valve repos + Arch base
+   * **32-bit (3)** → Experimental i686 build
+
+4. **Package list configuration**
+
+   * Adds base package lists for selected mode
+   * Optionally adds **extra packages** (game launchers, tools, drivers, etc.)
+   * Optionally switches kernel (mainline vs Neptune)
+   * Optionally applies **Lite mode** (removes Plasma, installs LXQt + autologin Xorg setup)
+
+5. **Boot setup**
+
+   * Extracts required boot files (`boot64.zip` or `boot32.zip`)
+   * Adjusts **cowspace size** (default 2G unless changed or skipped)
+
+6. **Final build**
+
+   * Runs `helper.sh` to assemble the persistent liveboot ISO
+
+---
+
+### 4. Output
+
+MKEDGE produces ISO files with the following naming scheme:
+
+```
+SteamOS_Edge_Upstream_<date>_x86_64.iso
+SteamOS_Edge_Downstream_<date>_x86_64.iso
+SteamOS_Edge_i686_<date>.iso
+```
 
 ---
 
 ## Usage
 
-Once built, write the ISO to a USB drive using `dd`, `balenaEtcher`, `Rufus`, or any ISO tool of your choice. You can use dd like this:
+To flash the ISO to a USB stick:
 
 ```
 sudo dd if=steamos-edge.iso of=/dev/sdX bs=4M status=progress
 ```
 
-Note: replace `/dev/sdX` with your USB device path. And in most cases that isnt /dev/sda
-
----
-
-## Changes
-
-| Feature                           | **SteamOS 3**              | **SteamOS Edge**                  |
-| --------------------------------- | -------------------------- | --------------------------------- |
-| **SteamOS repositories**          | ✅ Yes                      | ✅ Yes                             |
-| **Arch Linux packages**           | 📦 Old                     | 📦 New  and old                           |
-| **Boot compatibility**            | UEFI only                  | UEFI & Legacy BIOS                |
-| **Graphics drivers**              | AMD                        | AMD, Intel<br>*(NVIDIA untested but driver is installed)* |
-| **Read-only file system**         | ✅ Yes                      | ❌ No                              |
-| **Encrypted file system**         | ❌ No                       | ❌ No                              |
-| **File system backup slots**      | 1                          | Unlimited                         |
-| **CLI Package managers**          | `flatpak`, `nix`, `pacman` | `flatpak`, `pacman`        |
-| **Preferred CLI package manager** | `flatpak`                  | `pacman`                         |
-| **GUI Package manager**           | Discover (flatpak)         | Discover (flatpak)                |
-| **Update mechanism**              | Image-based (A/B)          | `steamos_edge_update` (custom)    |
-| **Installed package count**       | Small                      | Small/Medium                             |
-| **Game launchers**                | Steam,PrismLauncher, Lutris and more                     | Steam                             |
-| **Linux kernel options**          | Neptune (6.5)              | Mainline Linux, Linux Neptune     |
-| **Desktop environment**           | KDE Plasma 5               | KDE Plasma 6                      |
-| **Desktop theme**                 | Vapor                      | Vapor                             |
-
-
----
-
-## Compatible Hardware
-
-SteamOS Edge runs on most x86\_64 PCs, including:
-
-* Laptops and desktops
-* Handhelds like the AYANEO
-* Virtual machines (e.g. QEMU, VMware, VirtualBox) (Tested on KVM)
-* Steam Deck (native-ish) (Also tested, not sure why you want to run it there)
-
-If it boots an Arch ISO, it can likely boot this. Or not. Depends. And with the Neptune kernel enabled it likely only boots on the Steam Deck
+*(replace `/dev/sdX` with your USB device, usually not `/dev/sda`)*
 
 ---
 
 ## How to install to HDD?
 
-If you want to install SteamOS Edge to your HDD just run `sudo edge-deploy`. Or if you want a mutable distro run `sudo edge-deploy-exp`
+To install:
+
+```
+sudo edge-deploy
+```
+
+For a mutable Arch-like install:
+
+```
+sudo edge-deploy-exp
+```
 
 ---
 
 ## How to update system?
 
-Run `sudo steamos_edge_update`
+Simply run:
+
+```
+sudo steamos_edge_update
+```
+
+---
+
+## Changes
+
+| Feature                           | **SteamOS 3**        | **SteamOS Edge**                                     |
+| --------------------------------- | -------------------- | ---------------------------------------------------- |
+| **SteamOS repositories**          | ✅ Yes                | ✅ Yes                                                |
+| **Arch Linux packages**           | 📦 Old               | 📦 New + old                                         |
+| **Boot compatibility**            | UEFI only            | UEFI & Legacy BIOS                                   |
+| **Graphics drivers**              | AMD                  | AMD, Intel *(NVIDIA drivers installed but untested)* |
+| **Read-only file system**         | ✅ Yes                | ❌ No                                                 |
+| **Encrypted file system**         | ❌ No                 | ❌ No                                                 |
+| **File system backup slots**      | 1                    | Unlimited                                            |
+| **CLI Package managers**          | flatpak, nix, pacman | flatpak, pacman                                      |
+| **Preferred CLI package manager** | flatpak              | pacman                                               |
+| **GUI Package manager**           | Discover (flatpak)   | Discover (flatpak)                                   |
+| **Update mechanism**              | Image-based (A/B)    | `steamos_edge_update`                                |
+| **Installed package count**       | Small                | Small/Medium                                         |
+| **Game launchers**                | Steam only           | Steam, PrismLauncher, Lutris, etc.                   |
+| **Linux kernel options**          | Neptune (6.5)        | Mainline, Neptune                                    |
+| **Desktop environment**           | KDE Plasma 5         | KDE Plasma 6 *(or LXQt in lite)*                     |
+| **Desktop theme**                 | Vapor                | Vapor                                                |
+
+---
+
+## Compatible Hardware
+
+Runs on most x86\_64 hardware:
+
+* Laptops, desktops, and handhelds (tested on AYANEO, Steam Deck, etc.)
+* Virtual machines (QEMU, KVM, VMware, VirtualBox)
+* If it boots ArchISO, it usually boots this too.
+
+Note: Neptune kernel mode is **Steam Deck only**.
 
 ---
 
 ## Maintainers & Contributors
-
-SteamOS Edge is maintained by a small but growing group of community developers:
 
 | Role             | Name                 |
 | ---------------- | -------------------- |
@@ -159,58 +211,46 @@ SteamOS Edge is maintained by a small but growing group of community developers:
 | Contributor      | **realGamebreaker**  |
 | Contributor      | **Quota**            |
 
+---
 
+## Planned / Completed Work
+
+✅ Persistent liveboot support
+✅ x86\_64 support (generic hardware)
+✅ Steam Deck kernel support (Linux Neptune)
+✅ Extra package sets (launchers, controllers, etc.)
+✅ Lite mode (LXQt)
+✅ Automated build system with Go (MKEDGE)
+✅ BIOS + UEFI boot support
+✅ i686 experimental builds
+
+---
+
+## Contributing
+
+Want to help?
+
+* [Join the Discord](https://discord.gg/ChDGTpvzZv)
+* Read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 
 ---
 
 ## Licensing
 
-SteamOS Edge is open-source and licensed under:
+SteamOS Edge is licensed under:
 
-* [**GPLv3**](LICENSE.md) – for source code
-
-* [ **GFDL**](fdl.md) – for this documentation and included README files
-
-You’re free to use, modify, and redistribute under the terms of these licenses.
-Full license texts can be found in the repository.
+* [GPLv3](LICENSE.md)  for source code
+* [GFDL](fdl.md)  for docs and README files
 
 ---
 
 ## Disclaimer
 
-* Use at your own risk — no guarantees are made regarding stability or data safety
-* This is not affiliated with Valve or the official SteamOS project. Not even the maintainers of [evlaV](https://gitlab.com/evlaV)
-
-----
-
-## Planned Stuff
-A list of planned and completed goals for SteamOS Edge. Most of these are already implemented, but the roadmap is kept for clarity, accountability, and your reading enjoyment.
-
-
-| Status | Feature                                                                                                                                                                                                                                                               |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ✅      | **Portability** via persistent storage support                                                                                                                                                                                                                        |
-| ✅      | **Generic device installability** |
-| ✅      | Replace the build system with Makefiles, CMake, Waf, or a custom Go-based setup                                                                                                                                                                                       |
-| ✅      | Full **x86\_64 hardware support**                                                                                                                                                                                                                                     |
-| ✅      | Replace kernel with **Linux Neptune** (Valve)                                                                                                                                                                                                                         |
-| ✅      | Make the project **compile and build consistently**                                                                                                                                                                                                                   |
-| ✅      | Cross-platform **compilation support**:<br>    - Works on \*BSD, Linux distros, and Windows                                                                                                                                                                           |
-| ✅      | Make the ISO fully bootable on **non-Neptune** hardware                                                                                                                                                                                                               |
-| ✅      | Pre-install a wide set of **gaming packages**: PrismLauncher, Lutris, Bottles, etc.                                                                                                                                                                                   |
-| ✅      | Include `linux-firmware-valve` by [@LukeShortCloud](https://aur.archlinux.org/packages/linux-firmware-valve)                                                                                                                                                          |
-| ✅      | **Pre-installed drivers** for broader compatibility                                                                                                                                                                                                                   |
-
+* Use at your own risk  no guarantees on stability or data safety
+* Not affiliated with Valve or the official SteamOS project
 
 ---
 
-## Want to contribute?
-
-First if you want you can [Join the Discord](https://discord.gg/ChDGTpvzZv)
-
-Also check out [this](CONTRIBUTING.md) if you want to contribute
+# An EdgeDev Project
 
 ---
-
-# An EdgeDev project
-

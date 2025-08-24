@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 
-iso_name="SteamOS_Edge_Stable_Upstream"
+iso_name="SteamOS_Edge_Upstream"
 iso_label="steamos-edge_upstream"
 iso_publisher="EdgeDev Group <https://gitlab.com/edgedev1>"
 iso_application="SteamOS Edge Stable image"

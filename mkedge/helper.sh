@@ -11,8 +11,7 @@ export LC_ALL="C.UTF-8"
 [[ -v SOURCE_DATE_EPOCH ]] || printf -v SOURCE_DATE_EPOCH '%(%s)T' -1
 export SOURCE_DATE_EPOCH
 
-# Set application name from the script's file name
-app_name="${0##*/}"
+app_name="MKEDGE"
 
 # Define global variables. All of them will be overwritten later
 pkg_list=()
@@ -80,45 +79,8 @@ _msg_error() {
 # Show help usage, with an exit status.
 # $1: exit status number.
 _usage() {
-    IFS='' read -r -d '' usagetext <<ENDUSAGETEXT || true
-usage: ${app_name} [options] <profile_dir>
-  options:
-     -A <application> Set an application name for the ISO
-                      Default: '${iso_application}'
-     -C <file>        pacman configuration file.
-                      Default: '${pacman_conf}'
-     -D <install_dir> Set an install_dir. All files will be located here.
-                      Default: '${install_dir}'
-                      NOTE: Max 8 characters, use only [a-z0-9]
-     -L <label>       Set the ISO volume label
-                      Default: '${iso_label}'
-     -P <publisher>   Set the ISO publisher
-                      Default: '${iso_publisher}'
-     -c [cert ..]     Provide certificates for codesigning of netboot artifacts as
-                      well as the rootfs artifact.
-                      Multiple files are provided as quoted, space delimited list.
-                      The first file is considered as the signing certificate,
-                      the second as the key and the third as the optional certificate authority.
-     -g <gpg_key>     Set the PGP key ID to be used for signing the rootfs image.
-                      Passed to gpg as the value for --default-key
-     -G <mbox>        Set the PGP signer (must include an email address)
-                      Passed to gpg as the value for --sender
-     -h               This message
-     -m [mode ..]     Build mode(s) to use (valid modes are: 'bootstrap', 'iso' and 'netboot').
-                      Multiple build modes are provided as quoted, space delimited list.
-     -o <out_dir>     Set the output directory
-                      Default: '${out_dir}'
-     -p [package ..]  Package(s) to install.
-                      Multiple packages are provided as quoted, space delimited list.
-     -r               Delete the working directory at the end.
-     -v               Enable verbose output
-     -w <work_dir>    Set the working directory
-                      Default: '${work_dir}'
-
-  profile_dir:        Directory of the archiso profile to build
-ENDUSAGETEXT
-    printf '%s' "${usagetext}"
-    exit "${1}"
+    echo "No argumets specified! Are you running from MKEDGE?"
+    exit 1
 }
 
 # Shows configuration options.
@@ -127,24 +89,16 @@ _show_config() {
     printf -v build_date '%(%FT%R%z)T' "${SOURCE_DATE_EPOCH}"
     _msg_info "${app_name} configuration settings"
     _msg_info "             Architecture:   ${arch}"
-    _msg_info "        Working directory:   ${work_dir}"
-    _msg_info "   Installation directory:   ${install_dir}"
     _msg_info "               Build date:   ${build_date}"
     _msg_info "         Output directory:   ${out_dir}"
     _msg_info "       Current build mode:   ${buildmode}"
-    _msg_info "              Build modes:   ${buildmodes[*]}"
-    _msg_info "                  GPG key:   ${gpg_key:-None}"
-    _msg_info "               GPG signer:   ${gpg_sender:-None}"
-    _msg_info "Code signing certificates:   ${cert_list[*]:-None}"
-    _msg_info "                  Profile:   ${profile}"
-    _msg_info "Pacman configuration file:   ${pacman_conf}"
     _msg_info "          Image file name:   ${image_name:-None}"
     _msg_info "         ISO volume label:   ${iso_label}"
     _msg_info "            ISO publisher:   ${iso_publisher}"
     _msg_info "          ISO application:   ${iso_application}"
     _msg_info "               Boot modes:   ${bootmodes[*]:-None}"
     _msg_info "            Packages File:   ${buildmode_packages}"
-    _msg_info "                 Packages:   ${buildmode_pkg_list[*]}"
+    _msg_info "                     Welcome to SteamOS Edge!"
 }
 
 # Cleanup airootfs
@@ -170,7 +124,7 @@ _cleanup_pacstrap_dir() {
     rm -f -- "${pacstrap_dir}/etc/machine-id"
     printf 'uninitialized\n' >"${pacstrap_dir}/etc/machine-id"
 
-    _msg_info "Done!"
+    
 }
 
 # Create a squashfs image and place it in the ISO 9660 file system.
@@ -203,12 +157,12 @@ _mkairootfs_ext4+squashfs() {
     [[ ! "${quiet}" == "y" ]] || mkfs_ext4_options+=('-q')
     rm -f -- "${pacstrap_dir}.img"
     mkfs.ext4 "${mkfs_ext4_options[@]}" -- "${pacstrap_dir}.img" 32G
-    _msg_info "Done!"
+    
 
     install -d -m 0755 -- "${isofs_dir}/${install_dir}/${arch}"
     _msg_info "Creating SquashFS image, this may take some time..."
     _run_mksquashfs "${pacstrap_dir}.img"
-    _msg_info "Done!"
+    
     rm -- "${pacstrap_dir}.img"
 }
 
@@ -233,7 +187,7 @@ _mkairootfs_erofs() {
     mkfs_erofs_options+=('-U' '00000000-0000-0000-0000-000000000000' "${airootfs_image_tool_options[@]}")
     _msg_info "Creating EROFS image, this may take some time..."
     mkfs.erofs "${mkfs_erofs_options[@]}" -- "${image_path}" "${pacstrap_dir}"
-    _msg_info "Done!"
+    
 }
 
 # Create checksum file for the rootfs image.
@@ -246,7 +200,7 @@ _mkchecksum() {
         sha512sum airootfs.erofs >airootfs.sha512
     fi
     cd -- "${OLDPWD}"
-    _msg_info "Done!"
+    
 }
 
 # GPG sign the root file system image.
@@ -261,7 +215,7 @@ _mk_pgp_signature() {
     # always use the .sig file extension, as that is what mkinitcpio-archiso's hooks expect
     gpg --batch --no-armor --no-include-key-block --output "${airootfs_image_filename}.sig" --detach-sign \
         --default-key "${gpg_key}" "${gpg_options[@]}" "${airootfs_image_filename}"
-    _msg_info "Done!"
+    
 }
 
 # Helper function to run functions only one time.
@@ -327,7 +281,7 @@ _make_custom_airootfs() {
                 fi
             fi
         done
-        _msg_info "Done!"
+        
     fi
 }
 
@@ -396,12 +350,11 @@ _make_customize_airootfs() {
                 _msg_error "Failed to set permissions on '${pacstrap_dir}${passwd[5]}'. Outside of valid path." 1
             fi
         done <"${profile}/airootfs/etc/passwd"
-        _msg_info "Done!"
+        
     fi
 
     if [[ -e "${pacstrap_dir}/root/customize_airootfs.sh" ]]; then
         _msg_info "Running customize_airootfs.sh in '${pacstrap_dir}' chroot..."
-        _msg_warning "customize_airootfs.sh is deprecated! Support for it will be removed in a future archiso version."
         chmod -f -- +x "${pacstrap_dir}/root/customize_airootfs.sh"
         # Unset TMPDIR to work around https://bugs.archlinux.org/task/70580
         eval -- env -u TMPDIR arch-chroot "${pacstrap_dir}" "/root/customize_airootfs.sh"
@@ -442,7 +395,7 @@ _make_boot_on_iso9660() {
             fi
         done
     fi
-    _msg_info "Done!"
+    
 }
 
 # Prepare syslinux for booting from MBR (isohybrid)
@@ -516,7 +469,7 @@ _make_boot_on_fat() {
             mcopy -i "${efibootimg}" "${all_ucode_images[@]}" "::/${install_dir}/boot/"
         fi
     fi
-    _msg_info "Done!"
+    
 }
 
 # Create a FAT image (efiboot.img) which will serve as the EFI system partition
@@ -754,7 +707,7 @@ _make_bootmode_uefi-ia32.grub.eltorito() {
         install -m 0644 -- "${pacstrap_dir}/usr/share/edk2-shell/ia32/Shell_Full.efi" "${isofs_dir}/shellia32.efi"
     fi
 
-    _msg_info "Done!"
+    
 }
 
 _make_bootmode_uefi-x64.grub.esp() {
@@ -832,7 +785,7 @@ _make_bootmode_uefi-x64.grub.eltorito() {
         install -m 0644 -- "${pacstrap_dir}/usr/share/edk2-shell/x64/Shell_Full.efi" "${isofs_dir}/shellx64.efi"
     fi
 
-    _msg_info "Done!"
+    
 }
 
 _make_common_bootmode_systemd-boot() {
@@ -968,7 +921,7 @@ _make_bootmode_uefi-x64.systemd-boot.eltorito() {
         install -m 0644 -- "${pacstrap_dir}/usr/share/licenses/spdx/GPL-2.0-only.txt" "${isofs_dir}/boot/memtest86+/LICENSE"
     fi
 
-    _msg_info "Done!"
+    
 }
 
 _make_bootmode_uefi-ia32.systemd-boot.esp() {
@@ -1027,7 +980,7 @@ _make_bootmode_uefi-ia32.systemd-boot.eltorito() {
         install -m 0644 -- "${pacstrap_dir}/usr/share/edk2-shell/ia32/Shell_Full.efi" "${isofs_dir}/shellia32.efi"
     fi
 
-    _msg_info "Done!"
+    
 }
 
 _validate_requirements_bootmode_bios.syslinux.mbr() {
@@ -1268,7 +1221,7 @@ _export_netboot_artifacts() {
     # Remove grubenv since it serves no purpose in netboot artifacts
     rm -f -- "${out_dir}/${install_dir}/grubenv"
 
-    _msg_info "Done!"
+    
     du -hs -- "${out_dir}/${install_dir}"
 }
 
@@ -1295,7 +1248,7 @@ _cms_sign_artifact() {
 
     openssl cms "${openssl_flags[@]}"
 
-    _msg_info "Done!"
+    
 }
 
 # sign build artifacts for netboot
@@ -1321,7 +1274,7 @@ _sign_netboot_artifacts() {
             -outform DER \
             -out "${_file}".ipxe.sig
     done
-    _msg_info "Done!"
+    
 }
 
 _validate_requirements_airootfs_image_type_squashfs() {
@@ -1697,7 +1650,7 @@ _build_bootstrap_image() {
     _msg_info "Creating bootstrap image..."
     rm -f -- "${out_dir:?}/${image_name:?}"
     bsdtar -cf - "root.${arch}" "pkglist.${arch}.txt" | "${bootstrap_tarball_compression[@]}" >"${out_dir}/${image_name}"
-    _msg_info "Done!"
+    
     du -h -- "${out_dir}/${image_name}"
     cd -- "${OLDPWD}"
 }
@@ -1746,7 +1699,7 @@ _build_iso_image() {
         "${xorrisofs_options[@]}" \
         -output "${out_dir}/${image_name}" \
         "${isofs_dir}/"
-    _msg_info "Done!"
+    
     du -h -- "${out_dir}/${image_name}"
 }
 
@@ -1820,7 +1773,7 @@ _validate_options() {
     if (( validation_error )); then
         _msg_error "${validation_error} errors were encountered while validating the profile. Aborting." 1
     fi
-    _msg_info "Done!"
+    
 }
 
 # Set defaults and, if present, overrides from mkarchiso command line option parameters
@@ -1944,7 +1897,7 @@ _make_version() {
     # for systems with screwed or broken RTC.
     touch -m -d"@${SOURCE_DATE_EPOCH}" -- "${pacstrap_dir}/usr/lib/clock-epoch"
 
-    _msg_info "Done!"
+    
 }
 
 _make_pkglist() {
@@ -1958,7 +1911,7 @@ _make_pkglist() {
             pacman -Q --sysroot "${pacstrap_dir}" >"${isofs_dir}/${install_dir}/pkglist.${arch}.txt"
             ;;
     esac
-    _msg_info "Done!"
+    
 }
 
 # Create working directory
@@ -2129,5 +2082,6 @@ _read_profile
 _set_overrides
 _validate_options
 _build
+ehco "MKEDGE COMPLETE"
 
 # vim:ts=4:sw=4:et:
