@@ -1,12 +1,9 @@
-name: Build SteamOS Edge ISO lite
+name: Build SteamOS Edge ISO Lite
 
 on:
   schedule:
     - cron: "0 7 * * 5"
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 permissions:
   contents: write
@@ -44,6 +41,17 @@ jobs:
             xorriso e2fsprogs erofs-utils libarchive libisoburn gnupg \
             grub grub-common openssl python-docutils shellcheck
 
+      - name: Import GPG private key
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+
+      - name: Trust GPG key
+        run: |
+          KEY_ID=$(gpg --list-secret-keys --with-colons | grep sec | cut -d':' -f5)
+          echo "$KEY_ID:6:" | gpg --import-ownertrust
+
       - name: Build ISO with mkedge
         run: |
           chmod +x ./mkedgescript
@@ -51,19 +59,30 @@ jobs:
           rm -rf work/
           rm -rf airootfs/
 
+      - name: Locate ISO file
+        id: find_iso
+        run: |
+          ISO_FILE=$(ls out/*.iso | head -n 1)
+          echo "ISO_FILE=$ISO_FILE" >> $GITHUB_ENV
+          echo "iso_file=$ISO_FILE" >> $GITHUB_OUTPUT
+
+      - name: Sign ISO
+        run: |
+          gpg --batch --yes --output "${{ env.ISO_FILE }}.sig" --detach-sign "${{ env.ISO_FILE }}"
+
       - name: Split ISO into 1.9GB chunks
         run: |
           cd out
-          ISO_FILE=$(ls *.iso | head -n 1)
-          echo "Found ISO: $ISO_FILE"
-          split -b 1900M "$ISO_FILE" "${ISO_FILE}.part"
+          split -b 1900M "$(basename ${{ env.ISO_FILE }})" "$(basename ${{ env.ISO_FILE }}).part"
           ls -lh
 
-      - name: Upload ISO chunks as artifact
+      - name: Upload ISO chunks + signature as artifact
         uses: actions/upload-artifact@v4
         with:
           name: steamos-edge-iso-parts
-          path: out/*.part*
+          path: |
+            out/*.part*
+            ${{ env.ISO_FILE }}.sig
 
   release:
     needs: build
@@ -75,7 +94,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download build artifacts (ISO parts)
+      - name: Download build artifacts (ISO parts + signature)
         uses: actions/download-artifact@v4
         with:
           name: steamos-edge-iso-parts
@@ -90,7 +109,7 @@ jobs:
         with:
           tag_name: "build-litedwn-${{ github.run_id }}"
           name: "SteamOS Edge Lite Build run-${{ github.run_number }} (id ${{ github.run_id }})"
-          files: out/*.part*
+          files: out/*
           create_tag: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
