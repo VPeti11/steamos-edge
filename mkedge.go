@@ -216,51 +216,15 @@ func main() {
 		replaceCowspacePrompt(reader)
 	}
 
-	if *liteFlag {
-		handleLite(mode)
-	} else {
-		airootfsfile := "./airootfs/root/customize_airootfs.sh"
-		if mode == 1 || mode == 2 {
-
-			f, err := os.OpenFile(airootfsfile, os.O_APPEND|os.O_WRONLY, 0644)
-			if err != nil {
-				fmt.Println("Error opening customize_airootfs.sh:", err)
-				return
-			}
-			defer f.Close()
-
-			commands := `
-		# Add Plasma Wayland autostart
-		sudo bash -c 'cat > /home/deck/.bash_profile <<EOF
-		if [[ -z $WAYLAND_DISPLAY && $XDG_VTNR -eq 1 ]]; then
-		  exec dbus-run-session startplasma-wayland
-		fi
-		EOF'
-		`
-			_, err = f.WriteString(commands)
-			if err != nil {
-				fmt.Println("Error writing to customize_airootfs.sh:", err)
-				return
-			}
-		} else {
-
-			f, err := os.OpenFile(airootfsfile, os.O_APPEND|os.O_WRONLY, 0644)
-			if err != nil {
-				fmt.Println("Error opening customize_airootfs.sh:", err)
-				return
-			}
-			defer f.Close()
-
-			command := `
-# Enable SDDM display manager
-systemctl enable sddm
-`
-			_, err = f.WriteString(command)
-			if err != nil {
-				fmt.Println("Error writing to customize_airootfs.sh:", err)
-				return
-			}
+	lite := *liteFlag
+	if *modeFlag == 0 {
+		if lite == false {
+			lite = ask(reader, "Do you want lite mode? (y/n): ")
 		}
+	}
+
+	if lite {
+		handleLite(mode)
 	}
 
 	clearScreen()
@@ -664,24 +628,48 @@ func handleLite(mode int) {
 	}
 
 	customFile := "./airootfs/root/customize_airootfs.sh"
+	RemoveMagicBrackets(customFile)
 	f, err := os.OpenFile(customFile, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Println("Error opening customize_airootfs.sh:", err)
 		return
 	}
 	defer f.Close()
+	var commands string
 
-	commands := `
+	if mode == 3 {
+		commands = `
 cat > /home/deck/.xinitrc <<EOF
 exec startlxqt
 EOF
-
-sudo bash -c 'cat > /home/deck/.bash_profile <<EOF
-if [[ -z $WAYLAND_DISPLAY && $XDG_VTNR -eq 1 ]]; then
-  exec startx
+	
+cat > /home/deck/.bash_profile <<'EOF'
+if [[ -z $DISPLAY ]]; then
+	exec startx
 fi
+EOF
+
+sudo mkdir -p /etc/systemd/system/getty@tty1.service.d/
+sudo bash -c 'cat > /etc/systemd/system/getty@tty1.service.d/override.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin deck --noclear %I \$TERM
 EOF'
+sudo systemctl enable getty@tty1
 `
+	} else {
+		commands = `
+cat > /home/deck/.xinitrc <<EOF
+exec startlxqt
+EOF
+		
+cat > /home/deck/.bash_profile <<'EOF'
+if [[ -z $DISPLAY ]]; then
+	exec startx
+fi
+EOF
+`
+	}
 	_, err = f.WriteString(commands)
 	if err != nil {
 		fmt.Println("Error writing to customize_airootfs.sh:", err)
@@ -689,4 +677,38 @@ EOF'
 	}
 
 	printFancy("Lite mode enabled successfully.")
+}
+
+func RemoveMagicBrackets(filePath string) error {
+	inputFile, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer inputFile.Close()
+
+	var outputLines []string
+	scanner := bufio.NewScanner(inputFile)
+	inBracket := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "# MAGIC BRACKET") {
+			inBracket = !inBracket
+			continue
+		}
+		if !inBracket {
+			outputLines = append(outputLines, line)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading file: %w", err)
+	}
+
+	err = os.WriteFile(filePath, []byte(strings.Join(outputLines, "\n")), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return nil
 }

@@ -41,3 +41,12 @@ sudo pacman-key --lsign-key 53407B947EBAD024A4645885A139E9B289DC7527
 sudo pacman -Syy
 chmod +x /usr/local/bin/*
 chmod +x /usr/bin/*
+
+# MAGIC BRACKET
+sudo bash -c 'cat > /home/deck/.bash_profile <<EOF
+if [[ -z \$WAYLAND_DISPLAY && \$XDG_VTNR -eq 1 ]]; then
+  exec dbus-run-session startplasma-wayland
+fi
+EOF'
+
+# MAGIC BRACKET

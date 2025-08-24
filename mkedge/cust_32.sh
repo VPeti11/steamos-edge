@@ -117,3 +117,7 @@ Server = http://de.mirror.archlinux32.org/i686/$repo
 EOF
 chmod +x /usr/bin/*
 chmod +x /usr/local/bin/*
+
+# MAGIC BRACKET
+systemctl enable sddm
+# MAGIC BRACKET
