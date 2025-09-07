@@ -473,6 +473,7 @@ func extractZip(zipPath, destDir string) error {
 			return fmt.Errorf("failed to get absolute path for %s: %w", fpath, err)
 		}
 
+		// Prevent zip slip
 		if !strings.HasPrefix(absFile, absDest+string(os.PathSeparator)) && absFile != absDest {
 			return fmt.Errorf("illegal file path: %s", fpath)
 		}
@@ -488,29 +489,36 @@ func extractZip(zipPath, destDir string) error {
 			return fmt.Errorf("failed to create directory for file %s: %w", fpath, err)
 		}
 
+		// Open and fully read zip entry now
 		rc, err := f.Open()
 		if err != nil {
 			return fmt.Errorf("failed to open zipped file %s: %w", f.Name, err)
 		}
 
+		data, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			return fmt.Errorf("failed to read zipped file %s: %w", f.Name, err)
+		}
+
+		// Open output file
 		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
 		if err != nil {
-			rc.Close()
 			return fmt.Errorf("failed to create file %s: %w", fpath, err)
 		}
 
+		// Write in a goroutine
 		wg.Add(1)
-		go func(rc io.ReadCloser, outFile *os.File, fpath string) {
+		go func(data []byte, outFile *os.File, fpath string) {
 			defer wg.Done()
-			defer rc.Close()
 			defer outFile.Close()
 
-			if _, err := io.Copy(outFile, rc); err != nil {
-				fmt.Printf("Failed to copy file content for %s: %v\n", fpath, err)
+			if _, err := outFile.Write(data); err != nil {
+				fmt.Printf("Failed to write file content for %s: %v\n", fpath, err)
 			} else {
 				printFancy("Extracted: ", fpath)
 			}
-		}(rc, outFile, fpath)
+		}(data, outFile, fpath)
 	}
 
 	return nil
