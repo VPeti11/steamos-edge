@@ -13,10 +13,14 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 )
 
 var enableColor = true
+
+var wg sync.WaitGroup
 
 var colors = []string{
 	"\033[31m",
@@ -25,6 +29,19 @@ var colors = []string{
 	"\033[91m",
 	"\033[92m",
 	"\033[94m",
+}
+
+var bypassFlagChk bool
+
+type stringSlice []string
+
+func (s *stringSlice) String() string {
+	return fmt.Sprintf("%v", *s)
+}
+
+func (s *stringSlice) Set(value string) error {
+	*s = append(*s, value)
+	return nil
 }
 
 func main() {
@@ -39,23 +56,15 @@ func main() {
 	cleanupFlag := flag.Bool("cleanup", false, "Starts from scratch")
 	liteFlag := flag.Bool("lite", false, "Lite mode")
 	stagingFlag := flag.Bool("staging", false, "Use staging edge-repo")
-	helpFlag := flag.Bool("help", false, "Show this help menu")
+	var addExtra stringSlice
+	flag.Var(&addExtra, "addextra", "Add extra package (can be specified multiple times)")
+	clFlag := flag.Bool("nocolor", false, "Bypass color")
 	flag.Parse()
 
-	if *helpFlag {
-		fmt.Println(`Usage: mkedge [options]
-	
-	Options:
-	  --mode        Repository mode: 1=Downstream, 2=Upstream, 3=32-bit
-	  --extra       Add extra packages (modes 1,2 only)
-	  --neptune     Use Neptune kernel (mode 2 only)
-	  --build       Build the image after setup
-	  --cowspace    Set cowspace size (default 2G. Use 'skip' to skip changing it
-	  --bypass      Bypass checks
-	  --cleanup     Starts from scratch
-	  --help        Show this help menu`)
-		os.Exit(0)
+	if *clFlag {
+		enableColor = false
 	}
+
 	if !*bypassFlag && *cleanupFlag {
 		if !isSudo() {
 			printFancy("Not running as root")
@@ -71,42 +80,35 @@ func main() {
 	if *cowspaceFlag != "" {
 		if *cowspaceFlag != "skip" {
 			if !regexp.MustCompile(`^\d+G$`).MatchString(*cowspaceFlag) {
-				fmt.Println("Invalid cowspace size. Skipping replacing CoWspace")
+				printFancy("Invalid cowspace size. Skipping replacing CoWspace")
 				*cowspaceFlag = "skip"
 			}
 		}
 	}
 
-	filename := ".test"
+	bypassFlagChk = *bypassFlag
 
-	if _, err := os.Stat(filename); err == nil {
-		printFancy("Bypassing checks")
-		time.Sleep(15 / 10 * time.Second)
-	} else if os.IsNotExist(err) {
-		if !*bypassFlag {
-			if runtime.GOOS == "windows" {
-				printFancy("USE WSL WE DO NOT SUPPORT WINDOWS!!!")
-				os.Exit(1)
-			}
-			if !isPacmanAvailable() {
-				printFancy("This script requires pacman (Arch Linux)")
-				os.Exit(1)
-			}
-			if !isSudo() {
-				printFancy("Not running as root")
-				os.Exit(1)
-			}
-			if !checkInternet() {
-				printFancy("No internet")
-				os.Exit(1)
-			}
+	done := make(chan bool)
+	go func() {
+		doChecks()
+		done <- true
+	}()
+
+loop:
+	for {
+		printFancy("Checking system...")
+		printFancy("MKEDGE made by VPeti")
+		time.Sleep(50 * time.Millisecond)
+		clearScreen()
+
+		select {
+		case <-done:
+			break loop
+		default:
 		}
-	} else {
-		printFancy("Error when checking test file")
 	}
 
-	printFancy("MKEDGE made by VPeti")
-	time.Sleep(15 / 10 * time.Second)
+	printFancy("System checks passed. Continuing...")
 	clearScreen()
 
 	reader := bufio.NewReader(os.Stdin)
@@ -175,7 +177,6 @@ func main() {
 		}
 		copyFileMust("./mkedge/cust_64.sh", "./airootfs/root/customize_airootfs.sh")
 		clearScreen()
-		printFancy("(Not recommended)")
 		handleStaging(*stagingFlag, *modeFlag, extraEnable, mode)
 
 	case 2:
@@ -190,7 +191,6 @@ func main() {
 		}
 		copyFileMust("./mkedge/cust_64.sh", "./airootfs/root/customize_airootfs.sh")
 		clearScreen()
-		printFancy("(Recommended)")
 		handleStaging(*stagingFlag, *modeFlag, extraEnable, mode)
 
 	case 3:
@@ -237,6 +237,34 @@ func main() {
 
 	clearScreen()
 
+	var packagesToAdd []string
+
+	if len(addExtra) > 0 {
+		packagesToAdd = addExtra
+	} else if *modeFlag == 0 {
+		printFancy("Enter extra packages separated by space (leave empty to skip): ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+		if input != "" {
+			packagesToAdd = strings.Fields(input)
+		}
+	}
+
+	var packageFile string
+
+	if mode == 1 || mode == 2 {
+		packageFile = "packages.x86_64"
+	} else {
+		packageFile = "packages.i686"
+	}
+
+	if len(packagesToAdd) > 0 {
+		appendToFile(packageFile, packagesToAdd)
+		printFancy("Added extra packages:", packagesToAdd)
+	}
+
+	clearScreen()
+
 	// --- Build ---
 	build := *buildFlag
 	if *modeFlag == 0 {
@@ -244,7 +272,7 @@ func main() {
 	}
 
 	if !build {
-		fmt.Println("Exiting without building the image.")
+		printFancy("Exiting without building the image.")
 		os.Exit(0)
 	}
 
@@ -260,16 +288,16 @@ func main() {
 		installDeps.Stdout = os.Stdout
 		installDeps.Stderr = os.Stderr
 		installDeps.Stdin = os.Stdin
-		fmt.Println("Installing required packages...")
+		printFancy("Installing required packages...")
 		if err := installDeps.Run(); err != nil {
-			fmt.Println("Failed to install required packages.")
+			printFancy("Failed to install required packages.")
 			os.Exit(1)
 		}
 	}
 
 	clearScreen()
 	if err := os.Chmod("helper.sh", 0755); err != nil {
-		fmt.Println("Failed to make helper.sh executable:", err)
+		printFancy("Failed to make helper.sh executable:", err)
 		os.Exit(1)
 	}
 	runHelper("sudo", "./helper.sh", "-v", ".", "/")
@@ -317,91 +345,85 @@ func configureRepos(mode int) error {
 	return nil
 }
 
-func appendExtraPackages() {
-	extras := []string{
+func appendExtraPackages(mode string) {
+	// common packages
+	base := []string{
 		"prismlauncher",
 		"lutris-git",
-		"opengamepadui-bin",
 		"bottles",
-		"gzdoom",
-		"yay-bin",
 		"antimicrox-git",
-		"balena-etcher",
-		"coolercontrol-bin",
-		"betterdiscord-installer-bin",
-		"moonlight-qt-bin",
-		"peazip-qt-bin",
 		"polychromatic-git",
-		"protonup-qt-bin",
-		"sunshine-bin",
-	}
-	appendToFile("packages.x86_64", extras)
-}
-
-func appendExtraPackagesstage() {
-	extras := []string{
-		"prismlauncher",
-		"lutris-git",
-		"opengamepadui-git",
-		"bottles",
 		"gzdoom",
-		"yay",
-		"antimicrox-git",
-		"balena-etcher",
-		"coolercontrol",
-		"betterdiscord-installer",
-		"moonlight-qt-git",
-		"peazip",
-		"polychromatic-git",
-		"protonup-qt",
-		"sunshine",
-		"linux-firmware-valve",
 	}
-	appendToFile("packages.x86_64", extras)
-}
 
-func appendExtraPackagesdwn() {
-	extras := []string{
-		"prismlauncher",
-		"lutris-git",
+	pkgs := []string{
 		"opengamepadui",
-		"bottles",
-		"gzdoom",
 		"yay",
-		"antimicrox-git",
 		"coolercontrol",
 		"betterdiscord-installer",
 		"moonlight-qt",
-		"peazip",
-		"polychromatic-git",
-		"protonup-qt",
-	}
-	appendToFile("packages.x86_64", extras)
-}
-
-func appendExtraPackagesdwnstage() {
-	extras := []string{
-		"prismlauncher",
-		"lutris-git",
-		"opengamepadui-git",
-		"bottles",
-		"gzdoom",
-		"yay",
-		"antimicrox-git",
-		"coolercontrol",
-		"betterdiscord-installer",
-		"moonlight-qt-git",
-		"peazip",
-		"polychromatic-git",
+		"peazip-qt", // note: keep -qt so normal/dwn get peazip-qt-bin
 		"protonup-qt",
 		"sunshine",
-		"linux-firmware-valve",
+		"balena-etcher", // normal only
+		"ventoy",        // stage only
 	}
-	appendToFile("packages.x86_64", extras)
+
+	extras := make([]string, 0, len(pkgs))
+	for _, p := range pkgs {
+		name := p
+		include := false
+		suffix := ""
+
+		switch mode {
+		case "normal":
+			if p == "ventoy" {
+				continue
+			}
+			include = true
+			if p != "balena-etcher" {
+				suffix = "-bin"
+			} // everything except balena-etcher gets -bin
+		case "stage":
+			if p == "balena-etcher" {
+				continue
+			}
+			include = true
+			if p == "peazip-qt" {
+				name = "peazip"
+			} // stage is plain "peazip"
+		case "dwn":
+			if p == "ventoy" || p == "sunshine" || p == "balena-etcher" {
+				continue
+			}
+			include = true
+			suffix = "-bin"
+		case "dwnstage":
+			if p == "ventoy" || p == "balena-etcher" {
+				continue
+			}
+			include = true
+			if p == "peazip-qt" {
+				name = "peazip"
+			} // dwnstage is plain "peazip"
+		default:
+			printFancy("Unknown mode:", mode)
+			return
+		}
+
+		if include {
+			extras = append(extras, name+suffix)
+		}
+	}
+
+	appendToFile("packages.x86_64", append(base, extras...))
 }
 
 func appendToFile(filename string, lines []string) {
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
+	// Wait for all previous goroutines to finish
+	wg.Wait()
+
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		fmt.Printf("Failed to open %s: %v\n", filename, err)
 		return
@@ -415,7 +437,24 @@ func appendToFile(filename string, lines []string) {
 	}
 }
 
-func extractZip(zipPath string, destDir string) error {
+func copyFileMust(src, dest string) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		fmt.Printf("Failed to copy: %s %v\n", src, err)
+		os.Exit(1)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := os.WriteFile(dest, data, 0644); err != nil {
+			fmt.Printf("Failed to write: %s %v\n", dest, err)
+			os.Exit(1)
+		}
+	}()
+}
+
+func extractZip(zipPath, destDir string) error {
 	absDest, err := filepath.Abs(destDir)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute dest dir: %w", err)
@@ -460,40 +499,33 @@ func extractZip(zipPath string, destDir string) error {
 			return fmt.Errorf("failed to create file %s: %w", fpath, err)
 		}
 
-		_, err = io.Copy(outFile, rc)
+		wg.Add(1)
+		go func(rc io.ReadCloser, outFile *os.File, fpath string) {
+			defer wg.Done()
+			defer rc.Close()
+			defer outFile.Close()
 
-		outFile.Close()
-		rc.Close()
-
-		if err != nil {
-			return fmt.Errorf("failed to copy file content for %s: %w", fpath, err)
-		}
-
-		printFancy("Extracted: ", fpath)
+			if _, err := io.Copy(outFile, rc); err != nil {
+				fmt.Printf("Failed to copy file content for %s: %v\n", fpath, err)
+			} else {
+				printFancy("Extracted: ", fpath)
+			}
+		}(rc, outFile, fpath)
 	}
 
 	return nil
 }
 
-func copyFileMust(src, dest string) {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		fmt.Println("Failed to copy:", src, err)
-		os.Exit(1)
-	}
-	if err := os.WriteFile(dest, data, 0644); err != nil {
-		fmt.Println("Failed to write:", dest, err)
-		os.Exit(1)
-	}
-}
-
 func runHelper(args ...string) {
+	// Wait for all ongoing goroutines to finish first
+	wg.Wait()
+
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	if err := cmd.Run(); err != nil {
-		fmt.Println("Helper failed:", err)
+		printFancy("Helper failed:", err)
 		os.Exit(1)
 	}
 }
@@ -504,7 +536,7 @@ func replaceCowspaceFlag(newSize string) {
 		return
 	}
 	if !regexp.MustCompile(`^\d+G$`).MatchString(newSize) {
-		fmt.Println("Invalid cowspace size. Must be a number followed by 'G', e.g., 2G")
+		printFancy("Invalid cowspace size. Must be a number followed by 'G', e.g., 2G")
 		return
 	}
 
@@ -611,7 +643,7 @@ func cleanup() {
 
 func checkInternet() bool {
 	var cmd *exec.Cmd
-	cmd = exec.Command("ping", "-c", "5", "1.1.1.1")
+	cmd = exec.Command("ping", "-c", "2", "1.1.1.1")
 	err := cmd.Run()
 	return err == nil
 }
@@ -653,13 +685,13 @@ func handleLite(mode int) {
 	} else if mode == 3 {
 		pkgFile = "packages.i686"
 	} else {
-		fmt.Println("Invalid mode")
+		printFancy("Invalid mode")
 		return
 	}
 
 	lines, err := readLines(pkgFile)
 	if err != nil {
-		fmt.Println("Error reading package file:", err)
+		printFancy("Error reading package file:", err)
 		return
 	}
 
@@ -675,7 +707,7 @@ func handleLite(mode int) {
 
 	err = writeLines(pkgFile, newLines)
 	if err != nil {
-		fmt.Println("Error writing package file:", err)
+		printFancy("Error writing package file:", err)
 		return
 	}
 
@@ -683,7 +715,7 @@ func handleLite(mode int) {
 	RemoveMagicBrackets(customFile)
 	f, err := os.OpenFile(customFile, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Println("Error opening customize_airootfs.sh:", err)
+		printFancy("Error opening customize_airootfs.sh:", err)
 		return
 	}
 	defer f.Close()
@@ -724,7 +756,7 @@ EOF
 	}
 	_, err = f.WriteString(commands)
 	if err != nil {
-		fmt.Println("Error writing to customize_airootfs.sh:", err)
+		printFancy("Error writing to customize_airootfs.sh:", err)
 		return
 	}
 
@@ -816,21 +848,107 @@ func handleStaging(stagingFlag bool, modeFlag int, extraEnable bool, amode int) 
 		appendToFile("./airootfs/root/customize_airootfs.sh", heredoc)
 	}
 
-	if !stage {
-		if extraEnable {
-			if amode == 1 {
-				appendExtraPackagesdwn()
-			} else {
-				appendExtraPackages()
-			}
+	if extraEnable {
+		mode := ""
+		switch {
+		case stage && amode == 1:
+			mode = "dwnstage"
+		case stage && amode != 1:
+			mode = "stage"
+		case !stage && amode == 1:
+			mode = "dwn"
+		case !stage && amode != 1:
+			mode = "normal"
 		}
-	} else {
-		if extraEnable {
-			if amode == 1 {
-				appendExtraPackagesdwnstage()
-			} else {
-				appendExtraPackagesstage()
-			}
+		appendExtraPackages(mode)
+	}
+
+}
+
+func isAnotherInstanceRunning() bool {
+	// Get current PID
+	pid := os.Getpid()
+
+	// Use pgrep to find all processes with the exact name "mkedgescript"
+	out, err := exec.Command("pgrep", "-x", "mkedgescript").Output()
+	if err != nil {
+		return false // no other processes found
+	}
+
+	// Split output and check if any PID is not the current one
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
 		}
+		if line != fmt.Sprintf("%d", pid) {
+			return true
+		}
+	}
+	return false
+}
+
+func checkDiskSpace(minMB uint64) bool {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs("/", &stat); err != nil {
+		return false
+	}
+	freeMB := (stat.Bavail * uint64(stat.Bsize)) / 1024 / 1024
+	return freeMB >= minMB
+}
+
+func checkFS() bool {
+	out, err := exec.Command("df", "-T", "/").Output()
+	if err != nil {
+		return false
+	}
+	lines := strings.Split(string(out), "\n")
+	if len(lines) < 2 {
+		return false
+	}
+	fields := strings.Fields(lines[1])
+	fsType := fields[1]
+	return fsType != "ntfs" && fsType != "vfat" && fsType != "fat32"
+}
+
+func doChecks() {
+	if bypassFlagChk {
+		return
+	}
+
+	if runtime.GOOS == "windows" {
+		printFancy("USE WSL WE DO NOT SUPPORT WINDOWS!!!")
+		os.Exit(1)
+	}
+
+	// Check for required processes
+	if isAnotherInstanceRunning() {
+		printFancy("Another mkedgescript process is already running!")
+		os.Exit(1)
+	}
+
+	// Check disk space
+	if !checkDiskSpace(10 * 1024) { // 10 GB
+		printFancy("Not enough disk space! Need at least 10GB free.")
+		os.Exit(1)
+	}
+
+	// Check filesystem
+	if !checkFS() {
+		printFancy("Root filesystem is NTFS/FAT32. Use ext4/btrfs instead.")
+		os.Exit(1)
+	}
+
+	// Existing checks
+	if !isPacmanAvailable() {
+		printFancy("This script requires pacman (Arch Linux)")
+		os.Exit(1)
+	}
+	if !isSudo() {
+		printFancy("Not running as root")
+		os.Exit(1)
+	}
+	if !checkInternet() {
+		printFancy("No internet")
+		os.Exit(1)
 	}
 }
