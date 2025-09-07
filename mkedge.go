@@ -347,7 +347,7 @@ func appendExtraPackagesstage() {
 		"gzdoom",
 		"yay",
 		"antimicrox-git",
-		"etcher-ng-bin",
+		"etcher-bin",
 		"coolercontrol",
 		"betterdiscord-installer",
 		"moonlight-qt-git",
@@ -364,17 +364,17 @@ func appendExtraPackagesdwn() {
 	extras := []string{
 		"prismlauncher",
 		"lutris-git",
-		"opengamepadui-bin",
+		"opengamepadui",
 		"bottles",
 		"gzdoom",
-		"yay-bin",
+		"yay",
 		"antimicrox-git",
-		"coolercontrol-bin",
-		"betterdiscord-installer-bin",
-		"moonlight-qt-bin",
-		"peazip-qt-bin",
+		"coolercontrol",
+		"betterdiscord-installer",
+		"moonlight-qt",
+		"peazip",
 		"polychromatic-git",
-		"protonup-qt-bin",
+		"protonup-qt",
 	}
 	appendToFile("packages.x86_64", extras)
 }
