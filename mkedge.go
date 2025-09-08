@@ -20,7 +20,7 @@ import (
 
 var enableColor = true
 
-var wg sync.WaitGroup
+var wg sync.WaitGroup 
 
 var colors = []string{
 	"\033[31m",
@@ -125,12 +125,10 @@ loop:
 			clearScreen()
 			printFancy("MKEDGE complete")
 			os.Exit(0)
-		} else {
-			cleanup()
-			printFancy("Folders removed. Continuing build.")
 		}
 	}
-
+	
+	cleanup()
 	clearScreen()
 
 	// --- Choose repository mode ---
@@ -223,7 +221,10 @@ loop:
 	} else {
 		replaceCowspacePrompt(reader)
 	}
-
+	
+	wg.Wait()
+	clearScreen()
+	
 	lite := *liteFlag
 	if *modeFlag == 0 {
 		if lite == false {
@@ -515,8 +516,7 @@ func extractZip(zipPath, destDir string) error {
 
 			if _, err := outFile.Write(data); err != nil {
 				fmt.Printf("Failed to write file content for %s: %v\n", fpath, err)
-			} else {
-				printFancy("Extracted: ", fpath)
+				os.Exit(1)
 			}
 		}(data, outFile, fpath)
 	}
@@ -549,6 +549,8 @@ func replaceCowspaceFlag(newSize string) {
 	}
 
 	re := regexp.MustCompile(`cow_spacesize\s*=\s*\S+`)
+	semaphore := make(chan struct{}, 25) // Limit concurrency
+
 	_ = filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -564,19 +566,34 @@ func replaceCowspaceFlag(newSize string) {
 		if info.Name() == "mkedge.go" {
 			return nil
 		}
-
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
+		
+		if info.Name() == "mkedgescript" {
+			return nil
 		}
 
-		updated := re.ReplaceAllString(string(data), "cow_spacesize="+newSize)
-		if updated != string(data) {
-			if err := os.WriteFile(path, []byte(updated), info.Mode()); err != nil {
-				return err
+		wg.Add(1)
+		semaphore <- struct{}{} // Acquire slot
+
+		go func(path string, info os.FileInfo) {
+			defer wg.Done()
+			defer func() { <-semaphore }() // Release slot
+
+			data, err := os.ReadFile(path)
+			if err != nil {
+				printFancy("Failed to read file:", path, err)
+				return
 			}
-			printFancy("Updated:", path)
-		}
+
+			updated := re.ReplaceAllString(string(data), "cow_spacesize="+newSize)
+			if updated != string(data) {
+				if err := os.WriteFile(path, []byte(updated), info.Mode()); err != nil {
+					printFancy("Failed to write file:", path, err)
+					return
+				}
+				printFancy("Updated:", path)
+			}
+		}(path, info)
+
 		return nil
 	})
 }
