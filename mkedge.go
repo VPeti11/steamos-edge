@@ -3,12 +3,16 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"crypto/sha512"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -20,7 +24,7 @@ import (
 
 var enableColor = true
 
-var wg sync.WaitGroup 
+var wg sync.WaitGroup
 
 var colors = []string{
 	"\033[31m",
@@ -52,13 +56,15 @@ func main() {
 	neptuneFlag := flag.Bool("neptune", false, "Use Neptune kernel (mode 2 only)")
 	buildFlag := flag.Bool("build", false, "Build the image after setup")
 	cowspaceFlag := flag.String("cowspace", "", "Set cowspace size (default 2G). Use 'skip' to skip changing it")
-	bypassFlag := flag.Bool("bypass", false, "Bypass pacman/root checks")
+	bypassFlag := flag.Bool("bypass", false, "Bypass checks")
 	cleanupFlag := flag.Bool("cleanup", false, "Starts from scratch")
 	liteFlag := flag.Bool("lite", false, "Lite mode")
 	stagingFlag := flag.Bool("staging", false, "Use staging edge-repo")
 	var addExtra stringSlice
 	flag.Var(&addExtra, "addextra", "Add extra package (can be specified multiple times)")
 	clFlag := flag.Bool("nocolor", false, "Bypass color")
+	nclFlag := flag.Bool("nocleanup", false, "Dont clean up")
+	nsigFlag := flag.Bool("nosighandler", false, "Dont handle ctrl+c")
 	flag.Parse()
 
 	if *clFlag {
@@ -77,12 +83,21 @@ func main() {
 		cleanup()
 		os.Exit(0)
 	}
-	if *cowspaceFlag != "" {
-		if *cowspaceFlag != "skip" {
-			if !regexp.MustCompile(`^\d+G$`).MatchString(*cowspaceFlag) {
-				printFancy("Invalid cowspace size. Skipping replacing CoWspace")
-				*cowspaceFlag = "skip"
-			}
+
+	reader := bufio.NewReader(os.Stdin)
+
+	// --- Handle ./work folder ---
+	if _, err := os.Stat("./work"); err == nil {
+		cont := *modeFlag != 0
+		if *modeFlag == 0 {
+			cont = ask(reader, "'./work' folder exists. Continue build? (y/n): ")
+		}
+
+		if cont {
+			runHelper("sudo", "./helper.sh", "-v", ".", "/")
+			clearScreen()
+			printFancy("MKEDGE complete")
+			os.Exit(0)
 		}
 	}
 
@@ -108,27 +123,10 @@ loop:
 		}
 	}
 
-	printFancy("System checks passed. Continuing...")
-	clearScreen()
-
-	reader := bufio.NewReader(os.Stdin)
-
-	// --- Handle ./work folder ---
-	if _, err := os.Stat("./work"); err == nil {
-		cont := *modeFlag != 0
-		if *modeFlag == 0 {
-			cont = ask(reader, "'./work' folder exists. Continue build? (y/n): ")
-		}
-
-		if cont {
-			runHelper("sudo", "./helper.sh", "-v", ".", "/")
-			clearScreen()
-			printFancy("MKEDGE complete")
-			os.Exit(0)
-		}
+	if !*nsigFlag {
+		setupSignalHandler()
 	}
-	
-	cleanup()
+
 	clearScreen()
 
 	// --- Choose repository mode ---
@@ -215,16 +213,25 @@ loop:
 
 	clearScreen()
 
+	if *cowspaceFlag != "" {
+		if *cowspaceFlag != "skip" {
+			if !regexp.MustCompile(`^\d+G$`).MatchString(*cowspaceFlag) {
+				printFancy("Invalid cowspace size. Skipping replacing CoWspace")
+				*cowspaceFlag = "skip"
+			}
+		}
+	}
+
 	// --- Replace cowspace ---
 	if *cowspaceFlag != "" {
 		replaceCowspaceFlag(*cowspaceFlag)
 	} else {
 		replaceCowspacePrompt(reader)
 	}
-	
+
 	wg.Wait()
 	clearScreen()
-	
+
 	lite := *liteFlag
 	if *modeFlag == 0 {
 		if lite == false {
@@ -279,31 +286,16 @@ loop:
 
 	clearScreen()
 
-	// --- Install dependencies ---
-	if !*bypassFlag {
-
-		installDeps := exec.Command("sudo", "pacman", "-Sy", "--noconfirm", "--needed",
-			"arch-install-scripts", "base-devel", "git", "squashfs-tools", "mtools", "dosfstools",
-			"xorriso", "e2fsprogs", "erofs-utils", "libarchive", "libisoburn", "gnupg",
-			"grub", "openssl", "python-docutils", "shellcheck")
-		installDeps.Stdout = os.Stdout
-		installDeps.Stderr = os.Stderr
-		installDeps.Stdin = os.Stdin
-		printFancy("Installing required packages...")
-		if err := installDeps.Run(); err != nil {
-			printFancy("Failed to install required packages.")
-			os.Exit(1)
-		}
-	}
-
 	clearScreen()
 	if err := os.Chmod("helper.sh", 0755); err != nil {
 		printFancy("Failed to make helper.sh executable:", err)
 		os.Exit(1)
 	}
 	runHelper("sudo", "./helper.sh", "-v", ".", "/")
-	clearScreen()
-	printFancy("MKEDGE complete")
+	if !*nclFlag {
+		printFancy("Cleaning up...")
+		cleanup()
+	}
 }
 
 func isPacmanAvailable() bool {
@@ -566,7 +558,7 @@ func replaceCowspaceFlag(newSize string) {
 		if info.Name() == "mkedge.go" {
 			return nil
 		}
-		
+
 		if info.Name() == "mkedgescript" {
 			return nil
 		}
@@ -653,7 +645,6 @@ func clearScreen() {
 
 func cleanup() {
 	os.RemoveAll("work")
-	os.RemoveAll("out")
 	os.RemoveAll("grub")
 	os.RemoveAll("neptune")
 	os.RemoveAll("efiboot")
@@ -667,10 +658,13 @@ func cleanup() {
 }
 
 func checkInternet() bool {
-	var cmd *exec.Cmd
-	cmd = exec.Command("ping", "-c", "2", "1.1.1.1")
-	err := cmd.Run()
-	return err == nil
+	timeout := 3 * time.Second
+	conn, err := net.DialTimeout("tcp", "8.8.8.8:53", timeout)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }
 
 func readLines(filename string) ([]string, error) {
@@ -940,6 +934,13 @@ func doChecks() {
 		return
 	}
 
+	cleanup()
+
+	if !checkInternet() {
+		printFancy("No internet")
+		os.Exit(1)
+	}
+
 	if runtime.GOOS == "windows" {
 		printFancy("USE WSL WE DO NOT SUPPORT WINDOWS!!!")
 		os.Exit(1)
@@ -963,7 +964,6 @@ func doChecks() {
 		os.Exit(1)
 	}
 
-	// Existing checks
 	if !isPacmanAvailable() {
 		printFancy("This script requires pacman (Arch Linux)")
 		os.Exit(1)
@@ -972,8 +972,129 @@ func doChecks() {
 		printFancy("Not running as root")
 		os.Exit(1)
 	}
-	if !checkInternet() {
-		printFancy("No internet")
+
+	if err := validateChecksums(); err != nil {
+		printFancy("Error:", err)
 		os.Exit(1)
 	}
+
+	if err := checkMkedgeScript(); err != nil {
+		printFancy("MKEDGE checksum error!")
+		os.Exit(1)
+	}
+
+	installDeps := exec.Command("sudo", "pacman", "-Sy", "--noconfirm", "--needed",
+		"arch-install-scripts", "base-devel", "git", "squashfs-tools", "mtools", "dosfstools",
+		"xorriso", "e2fsprogs", "erofs-utils", "libarchive", "libisoburn", "gnupg",
+		"grub", "openssl", "python-docutils", "shellcheck")
+	installDeps.Stdout = io.Discard
+	installDeps.Stderr = io.Discard
+	if err := installDeps.Run(); err != nil {
+		printFancy("Failed to install required packages.")
+		os.Exit(1)
+	}
+}
+
+func validateChecksums() error {
+	expected := map[string]string{
+		"mkedge/32.conf":              "d0c34c96c55389c55f85d2f788a2114547bb5b17bd64f995b0abf4ecf6549d290ee3cbd53259f6483d4c9d6154b5692a1e4e480285888abfb977b0c03f671e63",
+		"mkedge/32.sh":                "e3b46f7bfe381f3c89e99b38a834c76993eba50cd5e43c91b7e1dd677b19f5f70d874fe722b5eb71cca024d1592f75a4a0d625dce3f06177d8d7dcc0cacd3f40",
+		"mkedge/64dwn.sh":             "b1c158629c645e88f115e122b32dc52524e6a2e4d7247179d6e43bd8b284f1563b29b791cbcf46b1fa6c179e58bd751d88059ccedd94bdc0d3d0ca9f517e5890",
+		"mkedge/64.sh":                "64fc4c088b6609a4d03f71de13784e3da209210883ec32b6fdb95da35d59613e8c2daa34a2ba54ce7533254969cf2b98a2273ecf3b378be3d03cfd7ee75098e1",
+		"mkedge/boot32.zip":           "d4c8824ca478320463f07f37ba573b538a8354c5720bb135f1700a59c396adde5de4027a6923aff09c7631db52545978451178ed8d54eb37fea0b1c319da2694",
+		"mkedge/boot64.zip":           "f3c19f6207e21792c90770ad9d381b1cda2ae396f36c3e20735871e03f219fd495a2330dacea9485f9f0747ad851fd6964dd39059c74dfa9e19c550033195970",
+		"mkedge/cust_32.sh":           "129a2c01b6c2f579470a0b64c56c70f9582ec62e7a1f3707438749c9649086cf8690fc524c1a84a48260ffaef15e95a780bbaf003e2b61b32b24a1b9746d105a",
+		"mkedge/cust_64.sh":           "7d49d63423118b9349de04635f63d7d2807c36af1c78836c99243128b9ccaad544ec4dc12b929913d4ee926366cb659e99ac7032f62363b6265e07186460c01b",
+		"mkedge/downstream.conf":      "02a2b7b4046cab7a5a20b60eba0a6a3d11c3990b0dbff8f7cebf0374c4a065bd2964d3a7556e2e745cd01bf73b431ca43d112d8dfa3fe845637ee45b60b5f2ba",
+		"mkedge/helper.sh":            "1d24dfbaf369bfbe0d1dc5a64c661114f5a0f4f0c24d802eb030b7205b4389cb625fd625c8ffe9fed3a407cee079024050228113f806c2b0c189bc29fc412899",
+		"mkedge/packages.i686.base":   "31107a1d2f9fca2857348621ff717014b81004ffe831fac4ba7e2269d2198807a2e473c7b189ed290f8c620a22c8cf8dafc21d64671ab0b6171be8c53c132f94",
+		"mkedge/packages.x86_64.base": "657df57e920a49c93a15def5bc22d1a4a71fa2bfaf4d3a98169008658cff151e51538d4cdfec55c407f94a980cb19d8a38e568550da812b75224613335a4503d",
+		"mkedge/upstream.conf":        "4987290b3a17b33108ffa455149dc136d7a73e68a1fa2d893358d38c681612f1cb25d661624188a7192138ab1866831094cd7d31d6b375f424303809bd4968a5",
+	}
+
+	return filepath.Walk("mkedge", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) == ".asc" || filepath.Ext(path) == ".sig" || filepath.Ext(path) == ".sha512" {
+			return nil
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("failed to open %s: %v", path, err)
+		}
+		defer f.Close()
+
+		h := sha512.New()
+		if _, err := io.Copy(h, f); err != nil {
+			return fmt.Errorf("failed to read %s: %v", path, err)
+		}
+		sum := hex.EncodeToString(h.Sum(nil))
+
+		expectedSum, ok := expected[path]
+		if !ok {
+			//return fmt.Errorf("no checksum for %s", path)
+		}
+		if sum != expectedSum {
+			return fmt.Errorf("checksum mismatch for %s", path)
+		}
+		return nil
+	})
+}
+
+func checkMkedgeScript() error {
+	// Read expected hash from ./mkedge/script.sha512
+	data, err := os.ReadFile("./mkedge/script.sha512")
+	if err != nil {
+		return fmt.Errorf("failed to read checksum file: %w", err)
+	}
+	expected := strings.TrimSpace(string(data))
+
+	// Get the path of the running executable
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Open the running executable
+	f, err := os.Open(exePath)
+	if err != nil {
+		return fmt.Errorf("failed to open executable: %w", err)
+	}
+	defer f.Close()
+
+	// Compute SHA512
+	hasher := sha512.New()
+	if _, err := io.Copy(hasher, f); err != nil {
+		return fmt.Errorf("failed to hash executable: %w", err)
+	}
+	actual := hex.EncodeToString(hasher.Sum(nil))
+
+	// Compare
+	if actual != expected {
+		return fmt.Errorf("checksum mismatch: expected %s, got %s", expected, actual)
+	}
+
+	return nil
+}
+
+func onCtrlC() {
+	fmt.Printf("\n")
+	printFancy("Ctrl+C detected! Running cleanup function...")
+	cleanup()
+}
+
+func setupSignalHandler() {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigs
+		onCtrlC()
+		os.Exit(1)
+	}()
 }

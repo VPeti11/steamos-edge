@@ -2,7 +2,7 @@
 
 **SteamOS Edge** is a modded version of the leaked 2025 SteamOS base, built for broader hardware compatibility and packed with community-driven gaming features. It provides a persistent liveboot experience designed for general x86 hardware, not just the Steam Deck  with added packages, driver tweaks, and customization options.
 
-This project builds on the original SteamOS leak and adds Arch-based tooling, extended package support, and an extensible ISO creation system using ArchISO and the **MKEDGE tool**. While building the image yourself is recommended, ISO files can be found in the Discord.
+This project builds on the original SteamOS leak and adds Arch-based tooling, extended package support, and an extensible ISO creation system using ArchISO and the **MKEDGE tool**. While building the image yourself is recommended, ISO files can be found in the Discord or GitHub.
 
 ***In short:***
 

@@ -37,18 +37,22 @@ It is designed as a replacement for the `mkarchiso -v ./` workflow, making **Ste
 
 ### Options
 
-| Flag         | Description                                               | Notes                                                              |
-| ------------ | --------------------------------------------------------- | ------------------------------------------------------------------ |
-| `--mode`     | Repository mode: `1`=Downstream, `2`=Upstream, `3`=32-bit | Interactive prompt if omitted                                      |
-| `--extra`    | Add extra packages (only in modes 1 and 2)                | Installs extras like PrismLauncher, Lutris, Moonlight, etc.        |
-| `--neptune`  | Use Neptune kernel (64-bit only)                          | Adds Neptune kernel + firmware (mode 1) or Valve firmware (mode 2) |
-| `--lite`     | Enable Lite mode (LXQt + xorg, autologin)                 | Replaces Plasma with LXQt + Xorg/Xterm   |
-| `--build`    | Build the image after setup                               | If omitted, asks interactively                                     |
-| `--cowspace` | Set CoW space size (e.g. `2G`) or `skip` to skip          | Defaults to 2G if omitted                                          |
-| `--bypass`   | Bypass pacman/root/internet checks                        | Use with caution                                                   |
-| `--cleanup`  | Remove build folders and files, then exit                 | Skips normal execution                                             |
-| `--help`     | Show help menu                                            | Shows usage and exits     
-| `--staging`     | Use staging edge-repo                                            | Use staging edge-repo                                           |
+| Flag            | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `-mode`         | Repository mode: 1=Downstream, 2=Upstream, 3=32-bit  |
+| `-extra`        | Add extra packages (only for modes 1 & 2)            |
+| `-neptune`      | Use Neptune kernel (mode 2 only)                     |
+| `-build`        | Build the image after setup                          |
+| `-cowspace`     | Set cowspace size (default 2G). Use `'skip'` to skip |
+| `-bypass`       | Bypass all checks                                    |
+| `-cleanup`      | Clean all build artifacts and exit                   |
+| `-lite`         | Enable lite mode (LXQt + Xorg)                       |
+| `-staging`      | Use staging edge repositories                        |
+| `-addextra`     | Add extra packages (repeatable)                      |
+| `-nocolor`      | Disable rainbow output                               |
+| `-nocleanup`    | Skip cleanup after build                             |
+| `-nosighandler` | Disable Ctrl+C handler                               |
+
 
 ---
 
@@ -81,13 +85,29 @@ This will:
 
 ---
 
-### Cleanup existing build folders:
+### Cleanup
 
-```
-./mkedge --cleanup
-```
+The -cleanup flag or Ctrl+C will remove:
 
-This deletes build folders (`work`, `out`, `grub`, `efiboot`, etc.) and exits.
+work/
+
+grub/
+
+neptune/
+
+efiboot/
+
+syslinux/
+
+Package files (packages.x86_64, packages.i686)
+
+helper.sh
+
+pacman.conf
+
+profiledef.sh
+
+Custom scripts in airootfs/root/customize_airootfs.sh
 
 ---
 
@@ -109,136 +129,22 @@ This tool is made by **VPeti (Lead Maintainer @ EdgeDev)** and is provided under
 
 ---
 
-## Execution Flow (Step-by-Step)
+### Checks and Validation
 
-This section documents the control flow and key helpers, so contributors can modify or extend behavior safely.
+Internet connection
 
-1. **Startup & flag parsing**
+Running as root
 
-   * Parses flags: `--mode`, `--extra`, `--neptune`, `--build`, `--cowspace`, `--bypass`, `--cleanup`, `--lite`, `--help`.
-   * If `--help`: prints usage and exits.
+Disk space >= 10 GB
 
-2. **Cleanup fast-path**
+Non-NTFS/FAT32 root filesystem
 
-   * If `--cleanup`:
+Pacman availability
 
-     * If **not** `--bypass`: requires root (`isSudo()`), else exits with error.
-     * Runs `cleanup()` and exits.
-     * `cleanup()` removes: `work/`, `out/`, `grub/`, `neptune/`, `efiboot/`, `syslinux/`, and generated files: `packages.x86_64`, `packages.i686`, `helper.sh`, `pacman.conf`, `profiledef.sh`.
+Single instance check
 
-3. **Cowspace flag validation**
+SHA512 checksum verification of critical files and running executable
 
-   * If `--cowspace` is set and not `"skip"`, validates `^\d+G$`; otherwise coerces to `"skip"` and prints a notice.
-
-4. **Environment checks & bypass logic**
-
-   * If `.test` exists → **bypass all checks**.
-   * Else if **not** `--bypass`:
-
-     * Rejects Windows hosts (`runtime.GOOS == "windows"`).
-     * Requires `pacman` (`isPacmanAvailable()`).
-     * Requires root (`isSudo()`).
-     * Requires internet (`checkInternet()` → `ping -c 5 1.1.1.1`).
-   * On failure, prints reason and exits.
-
-5. **Greeting & screen clear**
-
-   * Prints “MKEDGE made by VPeti” with color (`printFancy`) and `clearScreen()`.
-
-6. **Existing build detection**
-
-   * If `./work` exists:
-
-     * In **non-interactive** mode (`--mode` provided): assumes **continue**.
-     * In **interactive** mode: asks `"'./work' folder exists. Continue build? (y/n)"`.
-     * If **continue**: runs `runHelper("sudo", "./helper.sh", "-v", ".", "/")`, clears screen, prints completion, and exits.
-     * If **no**: runs `cleanup()` and continues fresh.
-
-7. **Repository mode selection**
-
-   * If `--mode` omitted: prompts `[1] Downstream [2] Upstream [3] 32-bit`.
-   * Sets `zipName` and copies mode scaffolding:
-
-     * **Downstream (1)**
-
-       * `zipName = boot64.zip`
-       * Copy: `mkedge/packages.x86_64.base → packages.x86_64`, `mkedge/64dwn.sh → profiledef.sh`, `mkedge/cust_64.sh → airootfs/root/customize_airootfs.sh`
-       * If `--extra`: `appendExtraPackagesdwn()` (curated AUR/binaries).
-       * **Neptune on?** Adds: `linux-neptune`, `linux-firmware-neptune`, `steamdeck-dsp`.
-       * **Neptune off**: Adds `linux-firmware`.
-     * **Upstream (2)**
-
-       * `zipName = boot64.zip`
-       * Copy: `mkedge/packages.x86_64.base → packages.x86_64`, `mkedge/64.sh → profiledef.sh`, `mkedge/cust_64.sh → airootfs/root/customize_airootfs.sh`
-       * If `--extra`: `appendExtraPackages()` (AUR/binaries).
-       * **Neptune on?** Adds `linux-firmware-valve`.
-     * **32-bit (3)**
-
-       * `zipName = boot32.zip`
-       * Copy: `mkedge/packages.i686.base → packages.i686`, `mkedge/32.sh → profiledef.sh`, `mkedge/cust_32.sh → airootfs/root/customize_airootfs.sh`
-   * Always copy `mkedge/helper.sh → ./helper.sh`.
-
-8. **Repository configuration**
-
-   * `configureRepos(mode)` writes `./pacman.conf` from one of:
-
-     * `mkedge/downstream.conf`, `mkedge/upstream.conf`, or `mkedge/32.conf`.
-
-9. **Boot assets extraction**
-
-   * `extractZip("mkedge/"+zipName, ".")`: safe extraction with path traversal guard.
-   * Prints `Extracted: <path>` for each item.
-
-10. **CoW space replacement**
-
-    * If `--cowspace` provided: `replaceCowspaceFlag(value)`.
-    * Else: `replaceCowspacePrompt()` asks size (default `2G`), then calls `replaceCowspaceFlag`.
-    * Replacement logic (`replaceCowspaceFlag`):
-
-      * Scans all files under `.` replacing `cow_spacesize = <...>` with `cow_spacesize=<VALUE>`.
-      * **Skips** `airootfs/`, `mkedge/` dirs and `mkedge.go`.
-
-11. **Lite mode handling**
-
-    * If `--lite` or interactive **Yes**:
-
-      * `handleLite(mode)`:
-
-        * Chooses package file (`packages.x86_64` for 64-bit, `packages.i686` for 32-bit).
-        * Removes any line starting with `plasma`.
-        * Appends: `lxqt`, `xorg`, `xorg-xinit`, `xterm`.
-        * Edits `airootfs/root/customize_airootfs.sh`:
-
-          * Removes lines between pairs of `# MAGIC BRACKET` markers (`RemoveMagicBrackets`).
-          * Appends:
-
-            * A minimal `/home/deck/.xinitrc` (`exec startlxqt`).
-            * `/home/deck/.bash_profile` to auto `startx` when no `$DISPLAY`.
-            * **Mode 3 (32-bit)** only: systemd override for `getty@tty1` to autologin user `deck`, and enables the unit.
-        * Prints “Lite mode enabled successfully.”
-
-12. **Build decision**
-
-    * If `--build` omitted: prompts “Do you want to build the image? (y/n)”.
-    * If **No**: prints message and exits.
-
-13. **Dependency installation (unless bypassed)**
-
-    * Runs `sudo pacman -Sy --noconfirm --needed` for:
-      `arch-install-scripts base-devel git squashfs-tools mtools dosfstools xorriso e2fsprogs erofs-utils libarchive libisoburn gnupg grub openssl python-docutils shellcheck`
-    * On failure: exits.
-
-14. **Helper execution**
-
-    * `chmod 0755 ./helper.sh`.
-    * `runHelper("sudo", "./helper.sh", "-v", ".", "/")`
-
-      * Streams stdio through to the user.
-      * Exits on error.
-
-15. **Finish**
-
-    * Clears screen and prints “MKEDGE complete”.
 
 ### Key helpers & utilities
 
