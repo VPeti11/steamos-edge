@@ -19,6 +19,8 @@ Currently the **32-bit build** is less stable, while **x86\_64 builds are stable
 
 [![SteamOS Edge Lite](https://github.com/VPeti11/steamos-edge/actions/workflows/buildlite.yml/badge.svg)](https://github.com/VPeti11/steamos-edge/actions/workflows/buildlite.yml)
 
+[![Staging edge-repo](https://github.com/VPeti11/edge-repo/actions/workflows/build.yml/badge.svg)](https://github.com/VPeti11/edge-repo/actions/workflows/build.yml)
+
 ---
 
 ## Key Features
@@ -52,18 +54,23 @@ This repo contains:
 SteamOS Edge must be built on **Arch Linux** or an Arch-based system.
 It will not work natively on Debian, Fedora, etc. You can, however, build inside a [Distrobox](https://github.com/89luca89/distrobox) or a privileged Arch Docker container.
 
+## What is MKEDGE?
+
+MKEDGE is a build automation tool designed for **SteamOS Edge** that prepares and builds custom repository images with various modes, package options, and installation profiles.
+It is designed as a replacement for the `mkarchiso -v ./` workflow, making **SteamOS Edge flexible and customizable**.
+
 ### 1. Build with MKEDGE
 
 Make the tool executable:
 
 ```
-chmod +x ./mkedge
+chmod +x ./mkedgescript
 ```
 
 Then run:
 
 ```
-./mkedge
+./mkedgescript
 ```
 
 ---
@@ -72,19 +79,21 @@ Then run:
 
 MKEDGE accepts both **interactive input** and **command-line flags**.
 
-Available flags:
-
-```
---mode        Repository mode: 1=Downstream, 2=Upstream, 3=32-bit
---extra       Add extra packages (modes 1,2 only)
---neptune     Use Neptune kernel (mode 2 only)
---build       Build the image after setup
---cowspace    Set cowspace size (default 2G, use 'skip' to skip)
---lite        Enable Lite mode (LXQt instead of Plasma)
---cleanup     Wipe previous ./work and build artifacts
---bypass      Bypass checks (root, pacman, internet)
---help        Show help menu
-```
+| Flag            | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `-mode`         | Repository mode: 1=Downstream, 2=Upstream, 3=32-bit  |
+| `-extra`        | Add extra packages (only for modes 1 & 2)            |
+| `-neptune`      | Use Neptune kernel (mode 2 only)                     |
+| `-build`        | Build the image after setup                          |
+| `-cowspace`     | Set cowspace size (default 2G). Use `'skip'` to skip |
+| `-bypass`       | Bypass all checks                                    |
+| `-cleanup`      | Clean all build artifacts and exit                   |
+| `-lite`         | Enable lite mode (LXQt + Xorg)                       |
+| `-staging`      | Use staging edge repositories                        |
+| `-addextra`     | Add extra packages (repeatable)                      |
+| `-nocolor`      | Disable rainbow output                               |
+| `-nocleanup`    | Skip cleanup after build                             |
+| `-nosighandler` | Disable Ctrl+C handler                               |
 
 If no flags are given, MKEDGE runs interactively, prompting you for choices.
 
@@ -96,7 +105,7 @@ Depending on your selections, MKEDGE will:
 
 1. **Validate environment**
 
-   * Checks root, pacman, internet (unless `--bypass` is set)
+   * Checks runtime conditions (unless `--bypass` is set)
    * Installs required packages with pacman (arch-install-scripts, base-devel, git, grub, squashfs-tools, etc.)
 
 2. **Repository setup**
@@ -105,9 +114,9 @@ Depending on your selections, MKEDGE will:
 
 3. **Mode selection**
 
-   * **Downstream (1)** → Community-maintained repos
-   * **Upstream (2)** → Valve repos + Arch base
-   * **32-bit (3)** → Experimental i686 build
+   * **Downstream (1)** → Valve repos
+   * **Upstream (2)** → Arch repos
+   * **32-bit (3)** → i686 repos
 
 4. **Package list configuration**
 
@@ -115,6 +124,7 @@ Depending on your selections, MKEDGE will:
    * Optionally adds **extra packages** (game launchers, tools, drivers, etc.)
    * Optionally switches kernel (mainline vs Neptune)
    * Optionally applies **Lite mode** (removes Plasma, installs LXQt + autologin Xorg setup)
+   * Optionally uses staging repos
 
 5. **Boot setup**
 
@@ -208,8 +218,6 @@ Runs on most x86\_64 hardware:
 * Virtual machines (QEMU, KVM, VMware, VirtualBox)
 * If it boots ArchISO, it usually boots this too.
 
-Note: Neptune kernel mode is **Steam Deck only**.
-
 ---
 
 ## Maintainers & Contributors
@@ -220,19 +228,6 @@ Note: Neptune kernel mode is **Steam Deck only**.
 | Dev / Maintainer | **VPeti11**          |
 | Contributor      | **realGamebreaker**  |
 | Contributor      | **Quota**            |
-
----
-
-## Planned / Completed Work
-
-✅ Persistent liveboot support
-✅ x86\_64 support (generic hardware)
-✅ Steam Deck kernel support (Linux Neptune)
-✅ Extra package sets (launchers, controllers, etc.)
-✅ Lite mode (LXQt)
-✅ Automated build system with Go (MKEDGE)
-✅ BIOS + UEFI boot support
-✅ i686 experimental builds
 
 ---
 
@@ -258,6 +253,318 @@ SteamOS Edge is licensed under:
 
 * Use at your own risk  no guarantees on stability or data safety
 * Not affiliated with Valve or the official SteamOS project
+
+---
+
+# How does MKEDGE work?
+
+---
+
+### Checks and Validation
+
+Internet connection
+
+Running as root
+
+Disk space >= 10 GB
+
+Non-NTFS/FAT32 root filesystem
+
+Pacman availability
+
+Single instance check
+
+SHA512 checksum verification of critical files and running executable
+
+
+### Key helpers & utilities
+
+* `printFancy`, `printFancyInline`, `randColor`, `enableColor`, `colors`
+  Colored output and inline prompts.
+* `isSudo()`, `isPacmanAvailable()`, `checkInternet()`
+  Environment and prerequisite checks (root, pacman, ping).
+* `configureRepos(mode)`
+  Copies the appropriate `pacman.conf` template.
+* `appendExtraPackages() / appendExtraPackagesdwn()`
+  Appends extras to `packages.x86_64`.
+* `extractZip(zipPath, destDir)`
+  Safe ZIP extraction with traversal guard.
+* `replaceCowspaceFlag(value)` / `replaceCowspacePrompt()`
+  Rewrites `cow_spacesize` occurrences.
+* `handleLite(mode)` / `RemoveMagicBrackets(file)`
+  Swaps desktop stack to LXQt and injects autostart/autologin config.
+* `cleanup()`
+  Removes generated files and build artifacts.
+* `runHelper(args...)`
+  Thin wrapper over `exec.Command` for `helper.sh`.
+
+### Generated/consumed files
+
+* **Inputs/templates (under `mkedge/`)**:
+  `*.conf` (repo configs), `*.sh` (profile/customize scripts), `packages.*.base`, `boot64.zip`, `boot32.zip`, `helper.sh`
+* **Generated in project root**:
+  `packages.x86_64` or `packages.i686`, `profiledef.sh`, `pacman.conf`, `helper.sh`
+* **Build artifacts**:
+  `work/`, `out/`, plus bootloader dirs (`grub/`, `efiboot/`, `syslinux/`) depending on profile
+
+---
+
+### Cleanup
+
+The -cleanup flag or Ctrl+C will remove:
+
+work/
+
+grub/
+
+neptune/
+
+efiboot/
+
+syslinux/
+
+Package files (packages.x86_64, packages.i686)
+
+helper.sh
+
+pacman.conf
+
+profiledef.sh
+
+airootfs/root/customize_airootfs.sh
+
+---
+
+### Non-interactive, scriptable example:
+
+```
+./mkedge --mode 2 --extra --neptune --cowspace 3G --lite --build
+```
+
+This will:
+
+* Use **Upstream mode**
+* Add **extra packages**
+* Use the **Neptune kernel**
+* Set **CoW space size to 3G**
+* Enable **Lite mode (LXQt)**
+* Build the image automatically
+
+---
+
+# Developer Workflow – MKEDGE
+This document explains the **end-to-end workflow** of the `mkedge` script at a level developers can extend or debug.
+Unlike a user guide, this focuses on **internal execution order**, **function responsibilities**, and **failure modes**.
+
+---
+
+## 1. Startup & Flag Parsing
+
+**Triggered first** when the script launches.
+
+* **Responsible code:** `main()` → flag parsing logic.
+* **Inputs:** Command-line arguments.
+* **Key flags:**
+
+  * `--mode <int>` → Selects architecture/build profile.
+  * `--extra` → Enable gaming/utility extras.
+  * `--staging` → Use staging repositories.
+  * `--lite` → Replace Plasma with LXQt.
+  * `--cowspace` → Enable special overlayfs cowspace handling.
+  * `--cleanup` → Force cleanup before building.
+  * `--bypass` → Skip environment checks.
+  * `--help` → Print usage and exit.
+
+**Outputs:**
+
+* Internal state variables: `modeFlag`, `stagingFlag`, `extraEnable`, `liteFlag`, etc.
+
+**Failure conditions:**
+
+* Invalid/unrecognized flag → exits immediately.
+
+---
+
+## 2. Initial Environment Validation (`doChecks`)
+
+Executed unless `--bypass` is provided.
+
+* **Responsible functions:**
+
+  * `doChecks()`
+  * `validateChecksums()`
+  * `checkMkedgeScript()`
+
+* **Inputs:** None directly; depends on system state and contents of `mkedge/`.
+
+* **Steps performed in order:**
+
+  1. **Cleanup:** Clear temporary or stale build state.
+  2. **Connectivity check:** Ensures internet access (`checkInternet()`).
+  3. **OS check:** Rejects Windows (enforces Linux).
+  4. **Process lock:** Prevents multiple mkedge instances (`isAnotherInstanceRunning()`).
+  5. **Disk space check:** Requires ≥10GB free.
+  6. **Filesystem type check:** Root FS must be ext4/btrfs.
+  7. **Pacman check:** Must be on Arch Linux.
+  8. **Root check:** Must be run as root (`isSudo()`).
+  9. **Static file validation:** Every known file in `mkedge/` (scripts, configs, zips) is hashed with SHA512 and compared against **hardcoded expected values** (`validateChecksums()`).
+  10. **Executable self-validation:** Running binary is hashed and compared with stored checksum (`script.sha512`).
+
+* **Side effects:**
+
+  * If all checks pass, attempts to **install required system dependencies** silently using `pacman`.
+
+* **Failure conditions (fatal exit):**
+
+  * No internet.
+  * Running on Windows.
+  * Another instance active.
+  * Insufficient disk space.
+  * Unsupported filesystem.
+  * `pacman` not found.
+  * Not root.
+  * Any checksum mismatch.
+  * Dependency installation fails.
+
+---
+
+## 3. Repository Configuration (`handleStaging`)
+
+Executed after checks, based on `--mode` and `--staging`.
+
+* **Responsible function:** `handleStaging(stagingFlag, modeFlag, extraEnable, amode)`
+
+* **Inputs:**
+
+  * `stagingFlag` (bool, from `--staging` or interactive prompt).
+  * `modeFlag` (int, defines build type).
+  * `extraEnable` (bool, from `--extra`).
+  * `amode` (arch mode: downstream, upstream, etc.).
+
+* **Steps performed:**
+
+  1. **Prompt user (if unset):** Asks “Do you want to use staging repos?” if no flag was given.
+  2. **Append repository entries:**
+
+     * If **normal mode** → Add `[edge-repo]` with **master branch** URLs (GitHub + GitLab).
+     * If **staging mode** → Add `[edge-repo]` with **staging branch** URL (GitHub only).
+     * Writes both to:
+
+       * `pacman.conf` (host build environment).
+       * `./airootfs/root/customize_airootfs.sh` (live ISO environment).
+  3. **If extras enabled** → Call `appendExtraPackages(mode)`.
+
+* **Outputs:**
+
+  * Modified repo configuration files.
+  * Updated package inclusion lists.
+
+* **Failure conditions:**
+
+  * None fatal; only invalid mode string prints warning.
+
+---
+
+## 4. Extra Package Injection (`appendExtraPackages`)
+
+Adds optional apps/utilities for gaming and desktop use.
+
+* **Inputs:**
+
+  * Mode string (`normal`, `stage`, `dwn`, `dwnstage`).
+
+* **Steps performed:**
+
+  * Defines a **base set** of packages:
+
+    * `prismlauncher`, `lutris-git`, `bottles`, `antimicrox-git`, `polychromatic-git`, `gzdoom`.
+  * Defines a **mode-specific set**, with logic for renaming/swapping:
+
+    * `sunshine` → normal = stable package, staging = `sunshine-beta-bin`.
+    * `peazip-qt` → staging = `peazip`.
+    * `ventoy` → staging only.
+    * `balena-etcher` → normal only.
+  * Writes combined list into `packages.x86_64`.
+
+* **Outputs:**
+
+  * Extended package file for ISO build.
+
+---
+
+## 5. Lite Mode (`handleLite`)
+
+Executed if `--lite` is enabled.
+
+* **Inputs:** `mode` (int, defines arch).
+
+* **Steps performed:**
+
+  1. Selects correct package list (`packages.x86_64` or `packages.i686`).
+  2. Removes Plasma packages.
+  3. Adds lightweight alternatives: `lxqt`, `xorg`, `xinit`, `xterm`.
+  4. Edits `customize_airootfs.sh`:
+
+     * Creates `.xinitrc` to start LXQt.
+     * Creates `.bash_profile` to autostart X.
+     * If 32-bit: also sets **tty1 auto-login into LXQt**.
+  5. Removes any lines inside `# MAGIC BRACKET` sections before appending.
+
+* **Outputs:**
+
+  * New package set with LXQt.
+  * Customized autologin/session start scripts in ISO.
+
+---
+
+## 6. Boot File Extraction & Prep
+
+* **Triggered later** in main build flow.
+* Extracts `boot32.zip` or `boot64.zip` depending on mode.
+* Prepares kernel/initrd hooks.
+* Applies **cowspace settings** if requested via `--cowspace`.
+
+---
+
+## 7. Mode-Specific Helper Execution
+
+* Runs architecture/mode-specific shell scripts inside `mkedge/`:
+
+  * `32.sh`, `64.sh` → Base config.
+  * `cust_32.sh`, `cust_64.sh` → Custom tweaks.
+  * `downstream.conf` / `upstream.conf` → Repo adjustments.
+  * `helper.sh` → Shared helper routines.
+
+---
+
+## 8. ISO Build
+
+* Calls Arch’s `mkarchiso` tool with the prepared config tree.
+* Builds full live ISO image into output directory.
+* Logs are mostly suppressed unless errors occur.
+
+---
+
+## 9. Cleanup (Optional)
+
+* If `--cleanup` flag set:
+
+  * Deletes previous `work/`, `out/`, and cached package directories.
+  * Leaves environment clean for fresh rebuild.
+
+---
+
+## End-to-End Workflow Summary
+
+1. **Parse flags** → Internal mode/config setup.
+2. **Run checks** → Validate environment, files, privileges, dependencies.
+3. **Configure repos** → Append staging/master URLs.
+4. **Inject extras** → Add gaming/utility packages.
+5. **Enable Lite mode** → Switch Plasma → LXQt if flagged.
+6. **Extract boot files** → Copy boot zips into build tree.
+7. **Run helpers** → Execute arch/mode scripts.
+8. **Build ISO** → Generate via mkarchiso.
+9. **Cleanup** → Remove leftovers if requested.
 
 ---
 

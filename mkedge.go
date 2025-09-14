@@ -23,6 +23,8 @@ import (
 )
 
 var enableColor = true
+var debFl bool
+var reset = "\033[0m"
 
 var wg sync.WaitGroup
 
@@ -34,8 +36,6 @@ var colors = []string{
 	"\033[92m",
 	"\033[94m",
 }
-
-var bypassFlagChk bool
 
 type stringSlice []string
 
@@ -65,7 +65,11 @@ func main() {
 	clFlag := flag.Bool("nocolor", false, "Bypass color")
 	nclFlag := flag.Bool("nocleanup", false, "Dont clean up")
 	nsigFlag := flag.Bool("nosighandler", false, "Dont handle ctrl+c")
+	debugFlag := flag.Bool("debug", false, "")
+	animFlag := flag.Bool("noanim", false, "Disable animations")
 	flag.Parse()
+
+	debFl = *debugFlag
 
 	if *clFlag {
 		enableColor = false
@@ -101,25 +105,30 @@ func main() {
 		}
 	}
 
-	bypassFlagChk = *bypassFlag
+	if !*bypassFlag {
+		if !*animFlag {
+			checkAnim()
+		} else {
 
-	done := make(chan bool)
-	go func() {
-		doChecks()
-		done <- true
-	}()
+			done := make(chan bool)
+			go func() {
+				doChecks()
+				done <- true
+			}()
 
-loop:
-	for {
-		printFancy("Checking system...")
-		printFancy("MKEDGE made by VPeti")
-		time.Sleep(50 * time.Millisecond)
-		clearScreen()
+		loop:
+			for {
+				printFancy("Checking system...")
+				printFancy("MKEDGE made by VPeti")
+				time.Sleep(50 * time.Millisecond)
+				clearScreen()
 
-		select {
-		case <-done:
-			break loop
-		default:
+				select {
+				case <-done:
+					break loop
+				default:
+				}
+			}
 		}
 	}
 
@@ -374,9 +383,12 @@ func appendExtraPackages(mode string) {
 				continue
 			}
 			include = true
-			if p != "balena-etcher" {
+			if p == "sunshine" {
+				// keep regular sunshine for normal
+				suffix = ""
+			} else if p != "balena-etcher" {
 				suffix = "-bin"
-			} // everything except balena-etcher gets -bin
+			}
 		case "stage":
 			if p == "balena-etcher" {
 				continue
@@ -384,7 +396,10 @@ func appendExtraPackages(mode string) {
 			include = true
 			if p == "peazip-qt" {
 				name = "peazip"
-			} // stage is plain "peazip"
+			} else if p == "sunshine" {
+				name = "sunshine-beta"
+				suffix = "-bin"
+			}
 		case "dwn":
 			if p == "ventoy" || p == "sunshine" || p == "balena-etcher" {
 				continue
@@ -398,7 +413,10 @@ func appendExtraPackages(mode string) {
 			include = true
 			if p == "peazip-qt" {
 				name = "peazip"
-			} // dwnstage is plain "peazip"
+			} else if p == "sunshine" {
+				name = "sunshine-beta"
+				suffix = "-bin"
+			}
 		default:
 			printFancy("Unknown mode:", mode)
 			return
@@ -930,57 +948,67 @@ func checkFS() bool {
 }
 
 func doChecks() {
-	if bypassFlagChk {
-		return
-	}
 
 	cleanup()
 
 	if !checkInternet() {
+		clearScreen()
 		printFancy("No internet")
 		os.Exit(1)
 	}
 
 	if runtime.GOOS == "windows" {
+		clearScreen()
 		printFancy("USE WSL WE DO NOT SUPPORT WINDOWS!!!")
 		os.Exit(1)
 	}
 
 	// Check for required processes
 	if isAnotherInstanceRunning() {
+		clearScreen()
 		printFancy("Another mkedgescript process is already running!")
 		os.Exit(1)
 	}
 
 	// Check disk space
 	if !checkDiskSpace(10 * 1024) { // 10 GB
+		clearScreen()
 		printFancy("Not enough disk space! Need at least 10GB free.")
 		os.Exit(1)
 	}
 
 	// Check filesystem
 	if !checkFS() {
+		clearScreen()
 		printFancy("Root filesystem is NTFS/FAT32. Use ext4/btrfs instead.")
 		os.Exit(1)
 	}
 
 	if !isPacmanAvailable() {
+		clearScreen()
 		printFancy("This script requires pacman (Arch Linux)")
 		os.Exit(1)
 	}
 	if !isSudo() {
+		clearScreen()
 		printFancy("Not running as root")
 		os.Exit(1)
 	}
 
-	if err := validateChecksums(); err != nil {
-		printFancy("Error:", err)
-		os.Exit(1)
-	}
+	if !debFl {
 
-	if err := checkMkedgeScript(); err != nil {
-		printFancy("MKEDGE checksum error!")
-		os.Exit(1)
+		if err := validateChecksums(); err != nil {
+			clearScreen()
+			printFancy("Error:", err)
+			os.Exit(1)
+		}
+
+		if err := checkMkedgeScript(); err != nil {
+			clearScreen()
+			printFancy("MKEDGE checksum error!")
+			os.Exit(1)
+		}
+
 	}
 
 	installDeps := exec.Command("sudo", "pacman", "-Sy", "--noconfirm", "--needed",
@@ -990,6 +1018,7 @@ func doChecks() {
 	installDeps.Stdout = io.Discard
 	installDeps.Stderr = io.Discard
 	if err := installDeps.Run(); err != nil {
+		clearScreen()
 		printFancy("Failed to install required packages.")
 		os.Exit(1)
 	}
@@ -1097,4 +1126,101 @@ func setupSignalHandler() {
 		onCtrlC()
 		os.Exit(1)
 	}()
+}
+
+func checkAnim() {
+	rand.Seed(time.Now().UnixNano())
+
+	done := make(chan bool, 1) // buffered to avoid blocking
+
+	go func() {
+		doChecks()
+		done <- true
+	}()
+
+	spinner := []string{"⠋", "⠙", "⠸", "⠴", "⠦", "⠇"}
+	pulsing := []string{".    ", "..   ", "...  ", " ....", "  ...", "   ..", "    ."}
+	matrix := []string{"[=     ]", "[==    ]", "[===   ]", "[====  ]", "[===== ]", "[======]", "[===== ]", "[====  ]", "[===   ]", "[==    ]", "[=     ]"}
+	stick1 := `  o
+ /|\
+ / \   o`
+	stick2 := `  o
+ /|\
+ / \    
+      o`
+	stick3 := `  o
+ /|\
+ / \      
+       o`
+
+	tape := `   ____________________________
+ /|............................|
+| |: Harman/Kardon Testing Tape :|
+| |:     "Induljon a banzáj!"   :|
+| |:     ,-.   _____   ,-.      :|
+| |:    ( ')) [_____] ( '))     :|
+|v|:     '-   ' ' '   -'        :|
+|||:     ,______________.       :|
+|||...../::::o::::::o::::\.....|
+|^|..../:::O::::::::::O:::\....|
+|/` + "`---/--------------------`---|\n.___/ /====/ /=//=/ /====/____/\n     --------------------"
+
+	animations := [][]string{
+		spinner,
+		pulsing,
+		matrix,
+		{stick1, stick2, stick3},
+		{tape},
+	}
+
+	textColor := colors[0]
+
+	// Goroutine to update top text color every 50ms
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				textColor = colors[rand.Intn(len(colors))]
+				time.Sleep(50 * time.Millisecond)
+			}
+		}
+	}()
+
+loop:
+	for {
+		idx := rand.Intn(len(animations))
+		anim := animations[idx]
+
+		var sleepDur time.Duration
+		switch idx {
+		case 0:
+			sleepDur = 150 * time.Millisecond
+		case 1:
+			sleepDur = 250 * time.Millisecond
+		case 2:
+			sleepDur = 300 * time.Millisecond
+		case 3:
+			sleepDur = 450 * time.Millisecond
+		case 4:
+			sleepDur = 1200 * time.Millisecond // slower for tape
+		default:
+			sleepDur = 300 * time.Millisecond
+		}
+
+		for i := 0; i < len(anim); i++ {
+			clearScreen()
+			fmt.Printf("%sChecking system...%s\n", textColor, reset)
+			fmt.Printf("%sMKEDGE made by VPeti%s\n\n", textColor, reset)
+			printFancy(anim[i])
+
+			// Wait but exit immediately if done
+			select {
+			case <-done:
+				break loop
+			case <-time.After(sleepDur):
+			}
+		}
+	}
 }
