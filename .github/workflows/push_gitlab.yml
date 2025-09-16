@@ -19,9 +19,11 @@ jobs:
     - name: Extract latest GitHub commit message
       id: commit_info
       run: |
-        echo "commit_msg<<EOF" >> $GITHUB_OUTPUT
-        git log -1 --pretty=format:'%B' >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        {
+          echo "commit_msg<<EOF"
+          git log -1 --pretty=format:'%B'
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Set up Git config with Mirror Bot identity
       run: |
