@@ -27,7 +27,7 @@ jobs:
             git checkout -B stable
           fi
 
-          git merge origin/main --no-ff -m "Mirror changes from main to stable" || echo "Already up to date"
+          git merge origin/main --no-ff --allow-unrelated-histories -m "Mirror changes from main to stable"
           
           git push origin stable
 
