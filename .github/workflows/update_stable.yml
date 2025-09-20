@@ -1,0 +1,74 @@
+name: Mirror main to stable and Push to GitLab
+
+on:
+  workflow_dispatch:
+
+jobs:
+  mirror-to-stable:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Set up Git config
+        run: |
+          git config --global user.name "Mirror Bot"
+          git config --global user.email "mirror-bot@edgedev1.github"
+
+      - name: Create or update stable branch
+        run: |
+          git fetch origin stable || echo "stable branch doesn't exist yet"
+          git checkout -B stable
+          git merge origin/main --no-ff -m "Mirror changes from main to stable" || echo "Already up to date"
+          git push origin stable
+
+  push-to-gitlab:
+    needs: mirror-to-stable
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout stable branch
+        uses: actions/checkout@v3
+        with:
+          ref: stable
+
+      - name: Extract latest commit message
+        id: commit_info
+        run: |
+          msg=$(git log -1 --pretty=format:'%B' | tr '\n' ' ')
+          echo "commit_msg=$msg" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Git config
+        run: |
+          git config --global user.name "GitLab Mirror Bot"
+          git config --global user.email "mirror-bot@edgedev1.gitlab"
+
+      - name: Clone GitLab repo and push to stable branch
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          git clone https://oauth2:${GITLAB_TOKEN}@gitlab.com/edgedev1/steamos-edge.git gitlab-mirror
+          cd gitlab-mirror
+
+          # Check out or create 'stable' branch
+          if git ls-remote --exit-code --heads origin stable; then
+            git checkout stable
+          else
+            git checkout -b stable
+          fi
+
+          # Sync files from GitHub stable branch (exclude .git, .github, etc.)
+          cd ..
+          rsync -av --delete --exclude='.git' --exclude='gitlab-mirror' --exclude='.github' ./ gitlab-mirror/
+          cd gitlab-mirror
+
+          git add .
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "${{ steps.commit_info.outputs.commit_msg }}"
+            git push origin stable
+          fi
