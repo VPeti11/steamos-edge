@@ -18,18 +18,14 @@ jobs:
           git config --global user.name "Mirror Bot"
           git config --global user.email "mirror-bot@edgedev1.github"
 
-      - name: Create or update stable branch
+      - name: Force update stable branch from main
         run: |
           git fetch origin
-          if git show-ref --verify --quiet refs/remotes/origin/stable; then
-            git checkout -B stable origin/stable
-          else
-            git checkout -B stable
-          fi
+          # Checkout the main branch first
+          git checkout main
+          # Force push main branch to stable branch on origin
+          git push origin main:stable --force
 
-          git merge origin/main --no-ff --allow-unrelated-histories -m "Mirror changes from main to stable"
-          
-          git push origin stable
 
   push-to-gitlab:
     needs: mirror-to-stable
@@ -70,11 +66,12 @@ jobs:
           cd ..
           rsync -av --delete --exclude='.git' --exclude='gitlab-mirror' --exclude='.github' ./ gitlab-mirror/
           cd gitlab-mirror
-
+          
           git add .
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
             git commit -m "${{ steps.commit_info.outputs.commit_msg }}"
-            git push origin stable
+            git push origin stable --force
           fi
+
