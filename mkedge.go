@@ -868,6 +868,7 @@ func handleStaging(stagingFlag bool, modeFlag int, extraEnable bool, amode int) 
 		block := []string{
 			"[edge-repo]",
 			"SigLevel = Never",
+			"Server = https://gitlab.com/edgedev1/edge-repo/-/raw/staging/x86_64/",
 			"Server = https://github.com/VPeti11/edge-repo/raw/refs/heads/staging/x86_64/",
 		}
 
@@ -878,6 +879,7 @@ func handleStaging(stagingFlag bool, modeFlag int, extraEnable bool, amode int) 
 			``,
 			`[edge-repo]`,
 			`SigLevel = Required DatabaseOptional`,
+			"Server = https://gitlab.com/edgedev1/edge-repo/-/raw/staging/x86_64/",
 			`Server = https://github.com/VPeti11/edge-repo/raw/refs/heads/staging/x86_64/`,
 			`EOF`,
 		}
@@ -984,28 +986,27 @@ func doChecks() {
 		os.Exit(1)
 	}
 
-	if !isPacmanAvailable() {
+	if err := validateChecksums(); err != nil {
 		clearScreen()
-		printFancy("This script requires pacman (Arch Linux)")
-		os.Exit(1)
-	}
-	if !isSudo() {
-		clearScreen()
-		printFancy("Not running as root")
+		printFancy("Error:", err)
 		os.Exit(1)
 	}
 
 	if !debFl {
-
-		if err := validateChecksums(); err != nil {
-			clearScreen()
-			printFancy("Error:", err)
-			os.Exit(1)
-		}
-
 		if err := checkMkedgeScript(); err != nil {
 			clearScreen()
 			printFancy("MKEDGE checksum error!")
+			os.Exit(1)
+		}
+
+		if !isPacmanAvailable() {
+			clearScreen()
+			printFancy("This script requires pacman (Arch Linux)")
+			os.Exit(1)
+		}
+		if !isSudo() {
+			clearScreen()
+			printFancy("Not running as root")
 			os.Exit(1)
 		}
 
@@ -1204,7 +1205,7 @@ loop:
 		case 3:
 			sleepDur = 450 * time.Millisecond
 		case 4:
-			sleepDur = 1200 * time.Millisecond // slower for tape
+			sleepDur = 1000 * time.Millisecond // slower for tape
 		default:
 			sleepDur = 300 * time.Millisecond
 		}

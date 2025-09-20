@@ -21,8 +21,6 @@ Currently the **32-bit build** is less stable, while **x86\_64 builds are stable
 
 [![Staging edge-repo](https://github.com/VPeti11/edge-repo/actions/workflows/build.yml/badge.svg)](https://github.com/VPeti11/edge-repo/actions/workflows/build.yml)
 
-[![Mirror staging edge-repo to GitLab](https://github.com/VPeti11/edge-repo/actions/workflows/push_gitlab.yml/badge.svg)](https://github.com/VPeti11/edge-repo/actions/workflows/push_gitlab.yml)
-
 [![Mirror to GitLab (steamos-edge)](https://github.com/VPeti11/steamos-edge/actions/workflows/push_gitlab.yml/badge.svg)](https://github.com/VPeti11/steamos-edge/actions/workflows/push_gitlab.yml)
 
 ---
