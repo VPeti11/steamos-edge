@@ -54,7 +54,7 @@ jobs:
       - name: Build ISO with mkedge
         run: |
           chmod +x ./mkedgescript
-          ./mkedgescript --mode 1 --cowspace skip --build --bypass --lite
+          ./mkedgescript --mode 2 --cowspace skip --build --bypass --lite
           rm -rf work/
           rm -rf airootfs/
 
@@ -106,7 +106,7 @@ jobs:
       - name: Create GitHub release and upload assets (auto-create tag)
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "build-litedwn-${{ github.run_id }}"
+          tag_name: "build-liteup-${{ github.run_id }}"
           name: "SteamOS Edge Lite Build run-${{ github.run_number }} (id ${{ github.run_id }})"
           files: out/*
           create_tag: true
