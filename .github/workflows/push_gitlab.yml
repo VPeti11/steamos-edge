@@ -43,8 +43,7 @@ jobs:
           git checkout -b main
         fi
     
-        # Delete all files and folders except ones starting with '.'
-        find . -mindepth 1 ! -name ".*" -exec rm -rf {} +
+        find . -mindepth 1 ! -name ".*" -exec rm -rf {} + 2>/dev/null || true
     
         # Go back and copy all safe folders into GitLab repo
         cd ..
