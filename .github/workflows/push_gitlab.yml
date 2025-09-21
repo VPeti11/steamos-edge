@@ -28,26 +28,29 @@ jobs:
       run: |
         git config --global user.name "GitLab Mirror Bot"
         git config --global user.email "mirror-bot@edgedev1.gitlab"
-
+        
     - name: Clone GitLab repo and push to main branch
       env:
         GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
       run: |
         git clone https://oauth2:${GITLAB_TOKEN}@gitlab.com/edgedev1/steamos-edge.git gitlab-mirror
         cd gitlab-mirror
-
+    
         # Check out or create 'main' branch
         if git ls-remote --exit-code --heads origin main; then
           git checkout main
         else
           git checkout -b main
         fi
-
+    
+        # Delete all files and folders except ones starting with '.'
+        find . -mindepth 1 ! -name ".*" -exec rm -rf {} +
+    
         # Go back and copy all safe folders into GitLab repo
         cd ..
         rsync -av --exclude='.git' --exclude='gitlab-mirror' --exclude='.github' ./ gitlab-mirror/
         cd gitlab-mirror
-
+    
         git add .
         if git diff --cached --quiet; then
           echo "No changes to commit"
@@ -55,3 +58,5 @@ jobs:
           git commit -m "${{ steps.commit_info.outputs.commit_msg }}"
           git push origin main
         fi
+
+
