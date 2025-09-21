@@ -1,162 +1,186 @@
 #!/bin/bash
-set -euo pipefail
-IFS=$'\n\t'
+set -e
 
-ask() {
-  local prompt="$1" default="$2" resp
-  if [[ -n "$default" ]]; then
-    read -rp "$prompt [$default]: " resp
-    resp="${resp:-$default}"
-  else
-    read -rp "$prompt: " resp
-  fi
-  printf '%s' "$resp"
-}
-ask_yes() {
-  local prompt="$1" yn
-  while true; do
-    read -rp "$prompt (yes/no): " yn
-    case "$yn" in yes) return 0 ;; no) return 1 ;; *) echo "Type yes or no." ;; esac
-  done
-}
-err() { printf 'ERROR: %s\n' "$*" >&2; }
+echo "==== SteamOS Edge Deploy script ===="
 
-REQUIRED=(parted lsblk dd mkfs.ext4 stat blockdev udevadm partprobe)
-for c in "${REQUIRED[@]}"; do
-  command -v "$c" >/dev/null 2>&1 || { err "missing $c"; exit 1; }
-done
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root. Use sudo!"
+    exit 1
+fi
 
-if [[ $EUID -ne 0 ]]; then err "run as root"; exit 1; fi
+# ===== 1. Ask for parameters =====
+read -rp "Target disk (example: /dev/sda): " DISK
+if [ ! -b "$DISK" ]; then
+    echo "Error: $DISK is not a valid block device."
+    exit 1
+fi
 
-while true; do
-  SRC="$(ask "Source (ISO file or block device)" "")"
-  [[ -n "$SRC" ]] || { echo "enter path"; continue; }
-  [[ -e "$SRC" ]] || { echo "not found"; continue; }
-  if ask_yes "Use $SRC?"; then break; fi
-done
+read -rp "EFI partition size in MiB (default 512): " BOOT_SIZE
+BOOT_SIZE=${BOOT_SIZE:-512}
 
-while true; do
-  DEST_RAW="$(ask "Destination disk (whole-disk device, e.g. /dev/sdb or /dev/nvme0n1)" "")"
-  [[ -n "$DEST_RAW" ]] || { echo "enter device"; continue; }
-  if [[ "$DEST_RAW" =~ [0-9]$ || "$DEST_RAW" =~ p[0-9]+$ ]]; then
-    parent="$(lsblk -ndo pkname "$DEST_RAW" 2>/dev/null || true)"
-    if [[ -n "$parent" ]]; then
-      parent="/dev/$parent"
-      if ask_yes "Operate on parent disk $parent (overwrite partition table)?"; then DEST_DISK="$parent"; else
-        if ask_yes "Operate on provided $DEST_RAW instead?"; then DEST_DISK="$DEST_RAW"; else continue; fi
-      fi
-    else
-      if ask_yes "Operate on provided $DEST_RAW?"; then DEST_DISK="$DEST_RAW"; else continue; fi
-    fi
-  else
-    DEST_DISK="$DEST_RAW"
-  fi
-  [[ -b "$DEST_DISK" || -e "$DEST_DISK" ]] || { echo "device not found"; continue; }
-  lsblk "$DEST_DISK"
-  if ask_yes "I will overwrite the partition table on $DEST_DISK. Proceed?"; then break; fi
-done
+read -rp "Enable UEFI boot? (y/n, default y): " UEFI_INPUT
+UEFI_INPUT=${UEFI_INPUT:-y}
+UEFI=false
+[ "$UEFI_INPUT" = "y" ] && UEFI=true
 
-if ask_yes "Enable shell tracing (verbose)?"; then set -x; fi
+read -rp "Enable BIOS boot? (y/n, default y): " BIOS_INPUT
+BIOS_INPUT=${BIOS_INPUT:-y}
+GRUB_BIOS=false
+[ "$BIOS_INPUT" = "y" ] && GRUB_BIOS=true
 
-get_size_bytes() {
-  local p="$1"
-  if [[ -b "$p" ]]; then blockdev --getsize64 "$p"; else stat -c%s "$p"; fi
-}
-SRC_BYTES="$(get_size_bytes "$SRC")"
-if [[ -z "$SRC_BYTES" || "$SRC_BYTES" -le 0 ]]; then err "cannot determine source size"; exit 1; fi
-MIB=1048576
-SRC_MiB=$(( (SRC_BYTES + MIB - 1) / MIB ))
+echo ""
+echo "Target disk: $DISK"
+echo "EFI partition size: $BOOT_SIZE MiB"
+echo "UEFI boot: $UEFI"
+echo "BIOS boot: $GRUB_BIOS"
+echo "WARNING: Everything on $DISK will be erased!"
+read -rp "Press Enter to continue or Ctrl+C to cancel..."
 
-PADDING_MiB_DEF=0
-PADDING_MiB_STR="$(ask "Padding in MiB to add to partition1" "$PADDING_MiB_DEF")"
-if [[ "$PADDING_MiB_STR" =~ ^[0-9]+$ ]]; then PADDING_MiB="$PADDING_MiB_STR"; else PADDING_MiB=0; fi
-PART1_SIZE_MiB=$(( SRC_MiB + PADDING_MiB ))
-
-DISK_BYTES="$(blockdev --getsize64 "$DEST_DISK")"
-DISK_MiB=$(( DISK_BYTES / MIB ))
-if (( DISK_MiB <= PART1_SIZE_MiB + 1 )); then err "destination too small"; exit 1; fi
-
-LABEL_MODE="$(ask "Partition table (auto/msdos/gpt)" "auto")"
-if [[ "$LABEL_MODE" == "auto" ]]; then
-  if ask_yes "Target machine BIOS-only? (if unsure answer yes)"; then LABEL="msdos"; else LABEL="gpt"; fi
+# ===== 2. Partition disk =====
+echo "Partitioning $DISK..."
+sgdisk --zap-all "$DISK"
+if $UEFI; then
+    sgdisk -n 1:0:+${BOOT_SIZE}M -t 1:ef00 -c 1:"EFI System" "$DISK"
+    sgdisk -n 2:0:0 -t 2:8300 -c 2:"Linux Root" "$DISK"
 else
-  LABEL="$LABEL_MODE"
+    sgdisk -n 1:0:0 -t 1:8300 -c 1:"Linux Root" "$DISK"
 fi
 
-BIOS_GRUB_MiB=0
-if [[ "$LABEL" == "gpt" ]]; then
-  if ask_yes "Create small bios_grub partition (no bootloader will be installed)?"; then
-    BIOS_GRUB_MiB_STR="$(ask "bios_grub size in MiB" "2")"
-    if [[ "$BIOS_GRUB_MiB_STR" =~ ^[0-9]+$ ]]; then BIOS_GRUB_MiB="$BIOS_GRUB_MiB_STR"; else BIOS_GRUB_MiB=2; fi
-  fi
+BOOT_PART="${DISK}1"
+ROOT_PART="${DISK}2"
+
+# ===== 3. Format partitions =====
+echo "Formatting partitions..."
+if $UEFI; then
+    mkfs.fat -F32 "$BOOT_PART"
+fi
+mkfs.ext4 "$ROOT_PART"
+
+# ===== 4. Mount partitions =====
+echo "Mounting partitions..."
+mount "$ROOT_PART" /mnt
+if $UEFI; then
+    mkdir -p /mnt/boot
+    mount "$BOOT_PART" /mnt/boot
 fi
 
-if [[ "$LABEL" == "gpt" && "$BIOS_GRUB_MiB" -gt 0 ]]; then
-  BIOS_START=1
-  BIOS_END=$(( BIOS_START + BIOS_GRUB_MiB ))
-  PART1_START=$(( BIOS_END ))
+# ===== 5. Copy live ISO root =====
+echo "Copying live ISO root filesystem..."
+
+SRC="/run/archiso/airootfs"
+DST="/mnt"
+
+RSYNC_OPTS='-aHAX --links --numeric-ids --info=progress2 --one-file-system'
+EXCLUDES='--exclude={"/dev/*","/proc/*","/sys/*","/tmp/*","/run/*","/var/run/*","/var/lock/*","/var/tmp/*","/var/mnt/*","/mnt/*","/media/*","/lost+found","/swapfile"}'
+
+# Create required directories
+mkdir -p "$DST/boot" "$DST/EFI"
+mkdir -p "$DST/usr/bin" "$DST/usr/sbin" "$DST/usr/lib" "$DST/usr/lib64" "$DST/usr/share"
+mkdir -p "$DST/bin" "$DST/sbin" "$DST/lib" "$DST/lib64"
+mkdir -p "$DST/etc" "$DST/opt" "$DST/root" "$DST/home" "$DST/var"
+
+# Copy /boot
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/boot/" "$DST/boot/"
+
+# Copy EFI (static subfolders only)
+mkdir -p "$DST/boot/EFI"
+cp -a "$SRC/EFI/BOOT" "$DST/boot/EFI/" || true
+cp -a "$SRC/EFI/archiso" "$DST/boot/EFI/" || true
+
+# Copy /usr (essential, minimal)
+rsync $RSYNC_OPTS $EXCLUDES --exclude={"/usr/share/doc/*","/usr/share/man/*","/usr/share/info/*","/usr/share/locale/*"} "$SRC/usr/bin/"  "$DST/usr/bin/"
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/usr/sbin/"  "$DST/usr/sbin/"
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/usr/lib/"    "$DST/usr/lib/"
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/usr/lib64/"  "$DST/usr/lib64/"
+rsync $RSYNC_OPTS $EXCLUDES --exclude={"doc","man","info","locale"} "$SRC/usr/share/" "$DST/usr/share/"
+
+# Copy /bin /sbin /lib /lib64
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/bin/"   "$DST/bin/"
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/sbin/"  "$DST/sbin/"
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/lib/"   "$DST/lib/"
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/lib64/" "$DST/lib64/" || true
+
+# Copy /etc /opt /root /home
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/etc/"   "$DST/etc/"
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/opt/"   "$DST/opt/" || true
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/root/"  "$DST/root/" || true
+rsync $RSYNC_OPTS $EXCLUDES "$SRC/home/"  "$DST/home/" || true
+
+# Copy /var (minimal)
+VAR_EXCLUDES='--exclude={"/var/cache/*","/var/log/*","/var/tmp/*","/var/run/*","/var/lock/*"}'
+rsync $RSYNC_OPTS $EXCLUDES $VAR_EXCLUDES "$SRC/var/" "$DST/var/"
+
+echo "Rsync copy finished."
+
+# ===== 6. Copy GRUB and EFI from live ISO/CD =====
+echo "Copying GRUB and EFI files from live ISO/CD..."
+if $UEFI || $GRUB_BIOS; then
+    # Create target directories
+    mkdir -p /mnt/boot/grub
+    mkdir -p /mnt/boot/EFI
+
+    # Copy GRUB modules (BIOS)
+    cp -a /run/archiso/bootmnt/boot/grub/* /mnt/boot/grub/ 2>/dev/null || true
+
+    # Copy EFI files (UEFI)
+    cp -a /run/archiso/bootmnt/EFI/BOOT /mnt/boot/EFI/ 2>/dev/null || true
+    cp -a /run/archiso/bootmnt/EFI/archiso /mnt/boot/EFI/ 2>/dev/null || true
+fi
+
+# ===== 7. Install bootloader based on partition choice =====
+echo "Setting up mountpoints and installing GRUB bootloader..."
+
+# Makesure required directories exist in the target for chroot
+mkdir -p /mnt/proc /mnt/sys /mnt/dev /mnt/dev/pts /mnt/run /mnt/tmp
+chmod 1777 /mnt/tmp
+mkdir -p /mnt/var/run /mnt/var/lock
+
+# Bind mount necessary filesystems
+mount --bind /dev  /mnt/dev
+mount --bind /dev/pts /mnt/dev/pts
+mount --bind /proc /mnt/proc
+mount --bind /sys  /mnt/sys
+mount --bind /run  /mnt/run
+
+# Determine PART_CHOICE for logic
+if $UEFI && ! $GRUB_BIOS; then
+    PART_CHOICE=1
+elif ! $UEFI && $GRUB_BIOS; then
+    PART_CHOICE=2
 else
-  PART1_START=1
+    PART_CHOICE=3
 fi
-PART1_END=$(( PART1_START + PART1_SIZE_MiB ))
 
-printf "Plan: part1 %d..%d MiB (%d MiB). part2 = remainder.\n" "$PART1_START" "$PART1_END" "$PART1_SIZE_MiB"
-if ! ask_yes "Proceed with this plan and overwrite $DEST_DISK?"; then err "aborted"; exit 1; fi
+# Install GRUB inside chroot based on PART_CHOICE
+if [[ "$PART_CHOICE" == "1" ]]; then
+  arch-chroot /mnt /usr/bin/grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --recheck --no-nvram || \
+    arch-chroot /mnt /usr/bin/grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --removable --recheck || \
+    echo "grub-install (UEFI) may have failed; inspect chroot."
+  arch-chroot /mnt /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg || echo "grub-mkconfig failed."
 
-if [[ "$LABEL" == "msdos" ]]; then
-  parted --script "$DEST_DISK" mklabel msdos \
-    mkpart primary "${PART1_START}MiB" "${PART1_END}MiB" \
-    mkpart primary "${PART1_END}MiB" 100% >/dev/null
-  parted --script "$DEST_DISK" set 1 boot on >/dev/null
-elif [[ "$LABEL" == "gpt" ]]; then
-  if (( BIOS_GRUB_MiB > 0 )); then
-    parted --script "$DEST_DISK" mklabel gpt \
-      mkpart primary "${BIOS_START}MiB" "${BIOS_END}MiB" \
-      mkpart primary "${PART1_START}MiB" "${PART1_END}MiB" \
-      mkpart primary "${PART1_END}MiB" 100% >/dev/null
-    parted --script "$DEST_DISK" set 1 bios_grub on >/dev/null
-  else
-    parted --script "$DEST_DISK" mklabel gpt \
-      mkpart primary "${PART1_START}MiB" "${PART1_END}MiB" \
-      mkpart primary "${PART1_END}MiB" 100% >/dev/null
-  fi
+elif [[ "$PART_CHOICE" == "2" ]]; then
+  arch-chroot /mnt /usr/bin/grub-install --target=i386-pc --recheck "$DISK" || echo "grub-install (BIOS) failed."
+  arch-chroot /mnt /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg || echo "grub-mkconfig failed."
+
 else
-  err "unsupported label"; exit 1
+  arch-chroot /mnt /usr/bin/grub-install --target=i386-pc --recheck "$DISK" || echo "grub-install (BIOS) failed."
+  arch-chroot /mnt /usr/bin/grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --recheck --no-nvram || \
+    arch-chroot /mnt /usr/bin/grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --removable --recheck || \
+    echo "grub-install (UEFI) may have failed."
+  arch-chroot /mnt /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg || echo "grub-mkconfig failed."
 fi
 
-partprobe "$DEST_DISK" || true
-udevadm settle || true
-sleep 1
+# Unmount bind mounts
+umount -R /mnt/dev/pts
+umount -R /mnt/dev
+umount -R /mnt/proc
+umount -R /mnt/sys
+umount -R /mnt/run
 
-disk_base=$(basename "$DEST_DISK")
-if [[ "$disk_base" == nvme* || "$disk_base" == mmcblk* ]]; then
-  if [[ "$LABEL" == "gpt" && "$BIOS_GRUB_MiB" -gt 0 ]]; then
-    PART1="${DEST_DISK}p2"; PART2="${DEST_DISK}p3"
-  else
-    PART1="${DEST_DISK}p1"; PART2="${DEST_DISK}p2"
-  fi
-else
-  if [[ "$LABEL" == "gpt" && "$BIOS_GRUB_MiB" -gt 0 ]]; then
-    PART1="${DEST_DISK}2"; PART2="${DEST_DISK}3"
-  else
-    PART1="${DEST_DISK}1"; PART2="${DEST_DISK}2"
-  fi
-fi
+echo "GRUB installation complete."
 
-for i in {1..15}; do
-  [[ -b "$PART1" && -b "$PART2" ]] && break
-  sleep 1
-done
-[[ -b "$PART1" && -b "$PART2" ]] || { err "partitions not found"; exit 1; }
+# ===== 8. Cleanup =====
+echo "Unmounting..."
+umount -R /mnt
 
-part1_bytes="$(blockdev --getsize64 "$PART1")"
-if (( part1_bytes < SRC_BYTES )); then err "partition1 smaller than source"; exit 1; fi
-
-printf "About to dd %s -> %s\n" "$SRC" "$PART1"
-if ! ask_yes "Proceed with dd?"; then err "dd cancelled"; exit 1; fi
-dd if="$SRC" of="$PART1" bs=4M status=progress conv=fsync
-sync
-
-mkfs.ext4 -F -L arch-bootstrap "$PART2"
-
-printf "Done. Image written to %s. %s formatted ext4.\n" "$PART1" "$PART2"
+echo "SteamOS Edge cloned to disk"
