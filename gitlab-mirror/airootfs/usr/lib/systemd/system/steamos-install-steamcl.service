@@ -1,0 +1,25 @@
+#  SPDX-License-Identifier: LGPL-2.1+
+#
+#  This file is part of steamos-customizations.
+#
+#  steamos-customizations is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License as
+#  published by the Free Software Foundation; either version 2.1 of the License,
+#  or (at your option) any later version.
+
+[Unit]
+Description=SteamOS Chainloader Installation
+DefaultDependencies=no
+Wants=esp.mount
+After=local-fs.target esp.mount
+Before=shutdown.target sysinit.target
+Conflicts=shutdown.target
+ConditionPathExists=!/esp/efi/boot/bootx64.efi
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/steamcl-install
+
+[Install]
+WantedBy=sysinit.target

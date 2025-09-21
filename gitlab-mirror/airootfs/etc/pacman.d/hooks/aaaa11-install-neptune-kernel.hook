@@ -1,0 +1,11 @@
+# remove from airootfs!
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = pacman-mirrorlist
+
+[Action]
+Description = Installing neptune kernel and initramfs...
+When = PostTransaction
+Exec = /usr/bin/bash -c '/bin/cp -r /etc/neptune/* /boot'

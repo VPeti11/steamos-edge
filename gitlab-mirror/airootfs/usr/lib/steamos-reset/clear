@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-2.0+
+
+# Copyright © 2022 Collabora Ltd
+# Copyright © 2022 Valve Corporation
+
+LIBDIR=$(dirname "$0")
+
+. ${LIBDIR:-.}/steamos-reset.sh
+
+set -u
+
+declare sid=
+declare known_sid=
+
+for arg in "$@"
+do
+    case $arg in
+        uuid=*)
+            sid=${arg#*=}
+            ;;
+    esac
+done
+
+declare -r sessions=$(list_sessions)
+
+if [ -n "$sid" ]
+then
+    if ! uuid_ok "$sid"
+    then
+       emit_json_response 400 "Malformed session ID '$sid'"
+       exit 0
+    fi
+
+    for known in ${sessions}
+    do
+        if [ "$sid" = "$known" ]
+        then
+            known_sid="$sid"
+            break
+        fi
+    done
+
+    if [ -z "$known_sid" ]
+    then
+        emit_json_response 404 "Session $sid not found"
+        exit 0
+    fi
+
+    if clear_session "$known_sid"
+    then
+        emit_json_response 200 "Session $known_sid deleted"
+    else
+        emit_json_response 500 "Delete session $known_sid failed"
+    fi
+
+    exit 0
+fi
+
+emit_json_response 400 "clear requires a session id"
+exit 0

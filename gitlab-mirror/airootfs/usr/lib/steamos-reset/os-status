@@ -1,0 +1,350 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-2.0+
+
+# Copyright © 2022 Collabora Ltd
+# Copyright © 2022 Valve Corporation
+
+LIBDIR=$(dirname "$0")
+
+set -eu
+. ${LIBDIR:-.}/steamos-reset.sh
+shopt -s extglob
+set +e
+
+declare -r RAUC_ROOTFS_INDEX=/var/lib/steamos-atomupd/rootfs.caibx
+declare -r PARTSET_LINKDIR=/dev/disk/by-partsets
+declare ATOMUPD_META_URL
+declare ATOMUPD_IMAGE_URL
+declare -r ATOMUPD_CONFIG=${1:-/etc/steamos-atomupd/client.conf}
+declare -r ATOMUPD_MANIFEST=${2:-/etc/steamos-atomupd/manifest.json}
+declare -A SELF
+declare -A IMAGE
+
+# If RAUC_ROOTFS_INDEX is present we can check if the rootfs is vanilla:
+os_is_unmodified ()
+{    
+    if [ ! -f $RAUC_ROOTFS_INDEX ]
+    then
+        log_msg "No index at $RAUC_ROOTFS_INDEX, cannot verify installed image"
+        return 1;
+    fi
+
+    if ! type -t desync >/dev/null
+    then
+        log_msg "desync not available, cannot verify installed image"
+        return 1
+    fi
+    
+    log_msg "desync verifying $RAUC_ROOTFS_INDEX vs $PARTSET_LINKDIR/self/rootfs"
+    if desync verify-index $RAUC_ROOTFS_INDEX $PARTSET_LINKDIR/self/rootfs
+    then
+        log_msg "Installed image is unmodified"
+        return 0
+    else
+        log_msg "Installed image has been modified"
+        return 1
+    fi
+}
+
+# find an upgrade candidate from the atomupd server(s):
+read_atomupd_config ()
+{
+    local key
+    local op
+    local val
+    local section
+
+    while read key op val op
+    do
+        case $key in
+            \[*\])
+                section=${key#\[}
+                section=${section%\]}
+                ;;
+            *)
+                if [ ${section:-none} = Server ];
+                then
+                    case $key in
+                        MetaUrl) ATOMUPD_META_URL="${val:-}"; ;;
+                        ImagesUrl) ATOMUPD_IMAGE_URL="${val:-}"; ;;
+                    esac
+                fi
+                ;;
+        esac
+    done < /etc/steamos-atomupd/client.conf
+
+    log_msg "read /etc/steamos-atomupd/client.conf: "
+    log_msg "${ATOMUPD_IMAGE_URL:-} ${ATOMUPD_META_URL:-}"
+
+    [ -n ${ATOMUPD_IMAGE_URL:-} ] && [ -n ${ATOMUPD_META_URL:-} ]
+}
+
+read_atomupd_manifest ()
+{
+    local PRODUCT RELEASE VARIANT ARCH VER BUILD
+    local -r JQ='"\(.product) \(.release) \(.variant) \(.arch) \(.version) \(.buildid)"'
+    read PRODUCT RELEASE VARIANT ARCH VER BUILD < <(jq -r "$JQ" "$1");
+
+    IMAGE[product]=${PRODUCT:-steamos}
+    IMAGE[release]=${RELEASE:-holo}
+    IMAGE[variant]=${VARIANT:-steamdeck}
+    IMAGE[arch]=${ARCH:-amd64}
+    IMAGE[version]=${VER:-snapshot}
+    IMAGE[build]=${BUILD:-19000101.1}
+}
+
+read_current_manifest ()
+{
+    read_atomupd_manifest ${ATOMUPD_MANIFEST}
+    SELF[product]=${IMAGE[product]}
+    SELF[release]=${IMAGE[release]}
+    SELF[variant]=${IMAGE[variant]}
+    SELF[arch]=${IMAGE[arch]}
+    SELF[version]=${IMAGE[version]}
+    SELF[build]=${IMAGE[build]}
+}
+
+resolve_fqdn ()
+{
+    local fqdn=${1:-unknown}
+    local addr name
+
+    while read addr name
+    do
+        case $addr in
+            (+([0-9a-f:]))
+              log_msg "$fqdn resolved to IPv6 $addr (${name:-})"
+              return 0
+              ;;
+            (+([0-9].))
+              log_msg "$fqdn resolved to IPv4 $addr (${name:-})"
+              return 0
+              ;;
+        esac
+    done < <(getent hosts "$fqdn" 2> /dev/null)
+
+    log_msg "Network failure: Could not resolve server name $fqdn"
+    return 1
+}
+
+network_ok ()
+{
+    local fqdn url
+
+    for url in ${ATOMUPD_IMAGE_URL:-unknown} ${ATOMUPD_META_URL:-unknown}
+    do
+        fqdn=${url#*//}
+        fqdn=${fqdn%/*}
+        if ! resolve_fqdn "$fqdn"
+        then
+            return 1
+        fi
+    done
+
+    url="${ATOMUPD_IMAGE_URL:-}${SELF[variant]}"/
+
+    if curl -s -I "$url"
+    then
+        return 0
+    fi
+
+    log_msg "Network failure: unsatisfactory response from ${url:-}"
+    return 1
+}
+
+parse_atomupd_response ()
+{
+    local -r JQ_VAR='\(.minor.candidates[0].image.variant)'
+    local -r JQ_PATH='\(.minor.candidates[0].update_path)'
+
+    jq -r  "\"$JQ_VAR $JQ_PATH\"" -
+}
+
+get_default_reset_image ()
+{
+    local variant path
+
+    log_msg "Calling steamos-atomupd-client to obtain update candidate"
+
+    read variant path < \
+         <(steamos-atomupd-client --query-only | parse_atomupd_response)
+
+    if [ "${variant:-null}" = null ]
+    then
+        log_msg "No pending updates found"
+        return 1
+    else
+        log_msg "Update is ${ATOMUPD_IMAGE_URL:-}${path:-} (${variant:-})"
+    fi
+
+    echo ${ATOMUPD_IMAGE_URL}${path:-}
+}
+
+get_alternate_reset_image ()
+{
+    local variant path
+
+    # There should be some static metadata at:
+    # META_URL/<product>/<arch>/<version>/<variant>.second_last.json
+    local -r mspec=${SELF[product]}/${SELF[arch]}/${SELF[version]}/${SELF[variant]}
+    local -r meta=${ATOMUPD_META_URL}/${mspec}.second_last.json
+
+    log_msg "Checking for alternate reset image at $meta"
+    read variant path < <(curl -s "$meta" | parse_atomupd_response)
+
+    if [ "${variant:-null}" = null ]
+    then
+        log_msg "No alternate reset image found"
+        return 1
+    else
+        log_msg "Reset is ${ATOMUPD_IMAGE_URL:-}${path:-} (${variant:-})"
+    fi
+
+    echo ${ATOMUPD_IMAGE_URL}${path:-}
+}
+
+find_reset_image ()
+{
+    read_current_manifest
+
+    # We need to talk to the atomupd server to check for updates:
+    if ! network_ok
+    then
+        log_msg "Update server not reachable"
+        set_session_status 511
+        return 0
+    fi
+
+    # If we get an image here that means there's an upgrade waiting for us.
+    # We can use that as a reset image:
+    if selected=$(get_default_reset_image)
+    then
+        save_data update-target txt "${selected:-}"
+        set_session_status 200
+        return 0
+    fi
+
+    # No upgrade waiting. We need to find a fallback image since we can't
+    # curently install the same image in more than one slot:
+    log_msg "Searching for '${SELF[variant]}' image which is not ${SELF[build]}"
+
+    # If a penultimate image is listed for us, we can downgrade instead.
+    # NOTE: There may not be a valid downgrade available.
+    if selected=$(get_alternate_reset_image)
+    then
+        save_data update-target txt "${selected:-}"
+        set_session_status 200
+        return 0
+    fi
+
+    # No upgrade or downgrade available. Can't do a full reset.
+    set_session_status 404
+    save_data update-target txt ""
+    return 0
+}
+
+check_os_status ()
+{
+    if os_is_unmodified;
+    then
+        save_data update-needed txt 0
+        save_data update-target txt ""
+        set_session_status 200
+    else
+        log_msg "Reading update configuration"
+        if ! read_atomupd_config
+        then
+            set_session_status 500
+            log_msg "/etc/steamos-atomupd/client.conf invalid"
+            log_msg "Meta URL: ${ATOMUPD_META_URL:-}"
+            log_msg "Image URL: ${ATOMUPD_IMAGE_URL:-}"
+            return
+        else
+            set_session_status 102
+            save_data update-needed txt 1
+            find_reset_image
+        fi
+    fi
+}
+
+emit_results ()
+{
+    local -r service=$(quote_escape $(basename "$0"))
+    local -ir needed=$(get_data update-needed txt)
+    local -r url=$(get_data update-target txt)
+
+    emit_json_header
+    cat - <<EOF
+{"service": "$service",
+ "version": "$VERSION",
+ "status": 200,
+ "message": "OS Status Check Complete",
+ "uuid":"$UUID",
+ "update":{"needed":$needed,"url":"$url"}}
+EOF
+}
+
+results_if_complete ()
+{
+    local uuid=${1:-}
+    local stype
+    local state
+
+    if ! uuid_ok "$uuid"
+    then
+        emit_json_response 400 "Malformed UUID '${uuid:-}'"
+        exit 0
+    fi
+
+    set_uuid "$uuid"
+    stype=$(get_session_type)
+
+    if [ "${stype:-}" != "os-status" ]
+    then
+        emit_json_response 400 "Session $uuid is not an os-status check"
+        exit 0
+    fi
+
+    state=$(get_session_status)
+
+    case $state in
+        200)
+            emit_results
+            ;;
+        102)
+            emit_json_response 102 "OS status check ongoing"
+            ;;
+        *)
+            emit_json_response ${state:-400} "OS status check failed"
+            ;;
+    esac
+
+    exit 0
+}
+
+# if asked for a specific UUID, we want the results (or status) of that
+# os-status session:
+declare sid arg
+for arg in "$@"
+do
+    case $arg in
+        uuid=*)
+            sid=${arg#*=}
+            results_if_complete "$sid"
+            ;;
+    esac
+done
+
+set_uuid
+setup_session_dirs
+set_session_type os-status
+set_session_status 102
+
+log_msg "OS-Status $@ started at $(date +%Y-%m-%d\ %H:%M:%S\ %z)"
+
+(close_stdio; register_session_pid; check_os_status) &
+disown
+
+emit_json_response 102 "Checking OS Update Target"
+exit 0

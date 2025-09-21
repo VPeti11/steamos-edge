@@ -1,0 +1,10 @@
+[Unit]
+Description=GPU performance capture daemon
+
+[Service]
+Environment=HOME=%h
+ExecStart=/usr//bin/gpu-trace --daemon
+ExecStop=/usr//bin/gpu-trace --exit
+
+[Install]
+WantedBy=multi-user.target

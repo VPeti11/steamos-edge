@@ -1,0 +1,11 @@
+[Unit]
+Description=Enable and start systemd-timesyncd
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/systemd/systemd-timesyncd
+
+[Install]
+WantedBy=multi-user.target
+

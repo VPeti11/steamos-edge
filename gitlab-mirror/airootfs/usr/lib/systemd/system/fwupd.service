@@ -1,0 +1,26 @@
+[Unit]
+Description=Firmware update daemon
+Documentation=https://fwupd.org/
+After=dbus.service
+Before=display-manager.service
+ConditionVirtualization=!container
+
+[Service]
+Type=dbus
+TimeoutSec=180
+RuntimeDirectory=motd.d
+RuntimeDirectoryPreserve=yes
+BusName=org.freedesktop.fwupd
+ExecStart=/usr/lib/fwupd/fwupd
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full
+SystemCallFilter=~@mount
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+RestrictRealtime=yes
+ReadWritePaths=-/boot/efi -/efi/EFI -/boot/EFI -/boot/grub
+ConfigurationDirectory=fwupd
+StateDirectory=fwupd
+CacheDirectory=fwupd
+RestrictAddressFamilies=AF_NETLINK AF_UNIX AF_INET AF_INET6

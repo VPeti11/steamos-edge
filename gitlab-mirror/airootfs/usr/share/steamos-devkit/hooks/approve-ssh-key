@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import logging
+import tempfile
+from urllib.parse import quote_plus as urllib_quote_plus
+import subprocess
+import json
+
+ENABLE_SSHD = '/usr/bin/steamos-polkit-helpers/steamos-enable-sshd'
+
+logger = logging.getLogger(os.path.realpath(__file__))
+
+import devkit_utils
+
+if __name__ == '__main__':
+    logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(logging.Formatter('%(name)s:%(message)s'))
+    logger.addHandler(ch)
+
+    request = open(sys.argv[1], 'rt').read()
+    requestIP = 'Unknown'
+    try:
+        requestIP = sys.argv[2]
+    except NameError:
+        logger.warning('request IP not given as argument to hook')
+        pass
+
+    key_identifier = request.split(' ')[2]
+    request = f'Development host at IP {requestIP} key: {key_identifier!r}'
+
+    ret = {}
+
+    try:
+        devkit_utils.validate_steam_client()
+    except devkit_utils.SteamClientNotRunningException as e:
+        msg = 'Steam is not running'
+        logger.warning(msg)
+        ret['error'] = msg
+    else:
+        with tempfile.TemporaryDirectory(prefix='approve-ssh-key') as tempdir:
+            logger.info('Sending pairing request to Steam')
+            response = os.path.join(tempdir, 'response')
+            cmd = 'approve-ssh-key?response={}&request={}'.format(
+                urllib_quote_plus(response),
+                urllib_quote_plus(request),
+            )
+            devkit_utils.execute_steam_client_command(cmd)
+            try:
+                with devkit_utils.wait_on_file_response(response, timeout=30) as f:
+                    logger.debug('Got response from Steam client')
+                    # Make sure sshd is enabled to support development features
+                    if os.path.exists(ENABLE_SSHD):
+                        subprocess.check_call(ENABLE_SSHD)
+                    else:
+                        subprocess.check_call('sudo systemctl enable --now sshd', shell=True)
+            except devkit_utils.SteamResponse_Timeout:
+                ret['error'] = 'timeout - Steam did not respond to the pairing request'
+            except devkit_utils.SteamResponse_Error as e:
+                ret['error'] = e.error_response
+
+    # json dictionary response gets written to stdout
+    # NOTE: the devkit service unfortunately smashes stdout/stderr all together in a text response, but we can still work with that
+    sys.stdout.flush()
+    sys.stderr.flush()
+    print(json.dumps(ret))
+    retcode = 1 if 'error' in ret else 0
+    sys.exit(retcode)

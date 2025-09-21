@@ -1,0 +1,24 @@
+#!/bin/bash
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root. Use sudo!"
+    exit 1
+fi
+mkdir -p /tmp/updating/
+cd /tmp/updating/
+arch=$(uname -m)
+if [[ "$arch" == "x86_64" ]]; then
+    echo "64-bit architecture detected"
+    wget https://gitlab.com/edgedev1/steamos-edge/-/raw/main/mkedge/packages.x86_64.base
+    pacman -Syu $(cat packages.x86_64) --needed --noconfirm
+elif [[ "$arch" == "i686" || "$arch" == "i386" ]]; then
+    echo "32-bit architecture detected"
+    wget https://gitlab.com/edgedev1/steamos-edge/-/raw/main/mkedge/packages.i686.base
+    pacman -Syu $(cat packages.i686) --needed --noconfirm
+else
+    echo "Unknown architecture: $arch"
+fi
+
+pacman -Syu
+echo "Installed packages"
+cd /
+rm -rf /tmp/updating/

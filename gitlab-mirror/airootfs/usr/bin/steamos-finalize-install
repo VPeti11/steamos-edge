@@ -1,0 +1,206 @@
+#!/bin/bash
+# -*- mode: sh; indent-tabs-mode: nil; sh-basic-offset: 4; -*-
+# vim: et sts=4 sw=4
+
+#  SPDX-License-Identifier: LGPL-2.1+
+#
+#  Copyright ©2022 Valve Corporation.
+#
+#  This file is part of steamos-customizations.
+#
+#  steamos-customizations is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License as
+#  published by the Free Software Foundation; either version 2.1 of the License,
+#  or (at your option) any later version.
+
+set -euo pipefail
+
+function usage
+{
+    cat <<EOF
+Usage: ${0##*/} [--roothash=HASH] [--no-bootloaders] [--no-kernel] [--no-migrate]
+
+Perform post-update migration steps before marking the new installation ready.
+Install boot artifacts on your device.
+EOF
+}
+
+# Install boot artifacts
+function install_bootloaders
+{
+    if [[ ! "${no_bootloaders:-}" ]]
+    then
+        typeset ident
+        ident=$(steamos-bootconf this-image)
+        # fallback if there are no bootconfs in /esp, so we can't determine our image name
+        if [[ -z ${ident} ]]
+        then
+            rootdsk=$(findmnt --noheadings -o PARTLABEL / )
+            ident=${rootdsk#rootfs-}
+        fi
+
+        if [[ -z ${ident} ]]
+        then
+            echo "Failed to determine new boot identifier"
+            exit 1
+        fi
+
+        steamcl-install
+        if mountpoint -q /boot
+        then
+            grub-install
+        else
+            echo "Warning: Skipping installation artifacts to /boot!" >&2
+            grub-mkimage
+        fi
+
+        if [[ ! -e /efi/SteamOS ]]
+        then
+            mkdir -p /efi/SteamOS
+        fi
+
+        if [[ ! -e /esp/SteamOS/conf/${ident}.conf ]]
+        then
+            echo "Initializing boot configuration at /esp/SteamOS/conf for ${ident}"
+            mkdir -p /esp/SteamOS/conf
+            steamos-bootconf --conf-dir /esp/SteamOS/conf create --image ${ident}
+        fi
+
+        # we want to know our buildid
+        . /etc/os-release ||:
+        # mostly just a nice-to-have, but it also resolves a condition where an empty conf doesn't get updated
+        steamos-bootconf --conf-dir /esp/SteamOS/conf config --image ${ident} --set comment "${BUILD_ID:-}"
+    fi
+
+    if [[ ! "${no_kernel:-}" ]]
+    then
+        echo "Runnign ${0##*/} without --no-kernel is not supported"
+        exit 1
+    fi
+    if [[ "${roothash:-}" ]]
+    then
+        mkdir -p /efi/SteamOS
+        echo "$roothash" >/efi/SteamOS/roothash
+    fi
+    mapfile -t linux < <(ls -1 /boot/vmlinuz-* 2>/dev/null)
+    if [[ "${#linux[*]}" -eq 0 ]]
+    then
+        echo "Warning: /boot: No such vmlinuz!" >&2
+    fi
+    mapfile -t initramfs < <(ls -1 /boot/initramfs-*.img 2>/dev/null)
+    if [[ "${#initramfs[*]}" -eq 0 ]]
+    then
+        echo "Warning: /boot: No such initramfs!" >&2
+    fi
+    mapfile -t modules < <(ls -d1 /usr/lib/modules/* 2>/dev/null)
+    if [[ "${#modules[*]}" -eq 0 ]]
+    then
+        echo "Warning: /usr/lib/modules: No such modules!" >&2
+    fi
+    update-grub
+}
+
+function in_chroot
+{
+    local proc_root;
+    local root;
+    if ! proc_root="$(stat --printf "%d %i" /proc/1/root/ 2>/dev/null)" || ! root="$(stat --printf "%d %i" / 2>/dev/null)"; then
+        return 1;
+    fi;
+    test "$proc_root" != "$root"
+}
+
+# Migrate configuration before booting new image.
+# Currently:
+#   Convert wifi system connections to a form that iwd can handle
+#
+function migrate_network
+{
+    # remove properties used by NetworkManager that are not permitted by iwd:
+    local nm_dir=/var/lib/overlays/etc/upper/NetworkManager/system-connections
+    test -d "$nm_dir" && find "$nm_dir" -type f -name \*.nmconnection -print0 | while read -r -d $'\0' file;
+    do
+        if grep -q '^type=wifi' "$file"
+        then
+            sed -i 's/^\(mac-address\|interface-name\|permissions\|bssid\)=.*//' "$file" ||:
+        fi
+    done
+
+    # when converting from early OS builds, we may not have masked out NetworkManager ephemeral files
+    rm -f /var/lib/NetworkManager/*
+}
+
+function migrate_home_steamos_update
+{
+    # These have been disabled during the product launch and removed sometime
+    # after. Remove the files from the user homedir.
+    rm -f "/home/deck/.config/autostart/steamos-update-os-notifier.desktop" || :
+    rm -f "/home/deck/.config/kupdatenotifierrc" || :
+
+}
+
+function update_pacman_dbpath
+{
+    local pacman_conf="/var/lib/overlays/etc/upper/pacman.conf"
+    if [[ ! -f "$pacman_conf" ]]; then
+        return 0
+    fi
+
+    # DBPath is on the RO rootfs with 3.5+
+    local -i path_ok=1
+    grep -q "^DBPath = /usr/lib/holo/pacmandb/$" "$pacman_conf" || path_ok=0
+    if (( ! path_ok )); then
+        sed -i "s|^#*DBPath.*$|DBPath = /usr/lib/holo/pacmandb/|" "$pacman_conf" || :
+    fi
+}
+
+while [[ "$#" -ne 0 ]]
+do
+    if [[ "$1" =~ ^(-h|--help)$ ]]
+    then
+        usage
+        exit
+    elif [[ "$1" =~ ^(--roothash)$ ]]
+    then
+        shift
+        roothash="$1"
+    elif [[ "$1" =~ ^(--no-bootloaders)$ ]]
+    then
+        no_bootloaders=1
+    elif [[ "$1" =~ ^(--no-kernel)$ ]]
+    then
+        no_kernel=1
+    elif [[ "$1" =~ ^(--no-boot-install)$ ]]
+    then
+        no_boot_install=1
+    elif [[ "$1" =~ ^(--no-migrate)$ ]]
+    then
+        no_migrate=1
+    elif [[ "$1" =~ ^(-f|--force)$ ]]
+    then
+        force_migrate=1
+    else
+        usage
+        echo "$1: Too many arguments" >&2
+        exit 1
+    fi
+    shift
+done
+
+if [[ ! ${no_migrate:-} ]]
+then
+    if in_chroot || [[ ${force_migrate:-} ]]
+    then
+        migrate_network
+        migrate_home_steamos_update
+        update_pacman_dbpath # DBPath is on the RO rootfs with 3.5+
+    else
+        echo "Skipping configuration migration steps as this is not running in a chroot."
+    fi
+fi
+
+if [[ ! ${no_boot_install:-} ]]
+then
+    install_bootloaders
+fi
+

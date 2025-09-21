@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-2.0+
+
+# Copyright © 2022 Collabora Ltd
+# Copyright © 2022 Valve Corporation
+LIBDIR=$(dirname "$0")
+
+set -eu
+. ${LIBDIR:-.}/steamos-reset.sh
+set +e
+
+unreset_os ()
+{
+    log_msg "Restoring boot to current image"
+    steamos-bootconf set-mode reboot
+    local -r current=$(steamos-bootconf this-image)
+    local -r selected=$(steamos-bootconf selected-image)
+    log_msg "Current image: ${current}; next boot: ${selected}"
+    
+    log_msg "Removing factory-reset configuration"
+    (cd $FACTORY_RESET_CONFIG_DIR && rm -vf *.cfg >&2)
+
+    set_session_status 200
+    return 0
+}
+
+log_msg "undo-reset $@ started at $(date +%Y-%m-%d\ %H:%M:%S\ %z)"
+
+set_uuid
+setup_session_dirs
+set_session_type undo-reset
+set_session_status 102
+
+(close_stdio; register_session_pid; unreset_os) &
+[ -t 2 ] || disown
+
+emit_json_response 102 "Undo factory-reset started"
+exit 0

@@ -1,0 +1,11 @@
+[Unit]
+Description=Mount all drives on live boot
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/mountdrives.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

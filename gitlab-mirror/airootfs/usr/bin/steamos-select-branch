@@ -1,0 +1,74 @@
+#!/bin/bash
+set -e
+
+BRANCH_PATH="/var/lib/steamos-branch"
+DEFAULT_BRANCH_PATH="/usr/lib/steamos/default-branch"
+CI_HOST_PATH="/var/lib/steamos-branch-ci-host"
+CI_KEY_PATH="/var/lib/steamos-branch-ci-key"
+
+# CI mode hook, target alternate environment
+ci_branch=
+ci_key=
+if [[ $# -ge 2 && $1 = "--ci-env" ]]; then
+  ci_env=${2-}
+  ci_branch=${ci_env%%:*}
+  ci_key=${ci_env#*:}
+  if [[ -z $ci_branch || -z $ci_key || $ci_branch = $ci_env || $ci_key = $ci_env ]]; then
+    echo "Invalid usage of --ci-env, expect ciname:key"
+    exit 1
+  fi
+  if ! [[ $ci_key =~ ^[0-9a-zA-Z]+$ && $ci_branch =~ ^[0-9a-zA-Z]+$ ]]; then
+    echo "Bad CI key/branch"
+    exit 1
+  fi
+
+  echo "$ci_branch" > "$CI_HOST_PATH"
+  echo "$ci_key" > "$CI_KEY_PATH"
+
+  # If no other branch/command given, select ci name as default branch
+  if [[ $# -eq 2 ]]; then
+    echo "$ci_branch" > "$BRANCH_PATH"
+    exit 0
+  fi
+fi
+
+if [[ $# -eq 1 ]]; then
+  case "$1" in
+    "-c")
+      branch=$(cat "$BRANCH_PATH" 2> /dev/null || cat "$DEFAULT_BRANCH_PATH" 2>/dev/null || echo "rel")
+      case "$branch" in
+        "rel" | "rc" | "beta" | "bc" | "main" | "staging")
+          echo "$branch"
+          exit 0
+          ;;
+        *)
+          # This can happen on CI builds or when downgrading from a newer build that knows of more branches.  The update
+          # path should decide how to handle it.
+          echo >&2 "Warning: Unrecognized currently selected branch name '$branch', updates may not succeed."
+          echo "$branch"
+          exit 0
+          ;;
+      esac
+      ;;
+    "-l")
+      echo rel
+      echo rc
+      echo beta
+      echo bc
+      echo main
+      exit 0
+      ;;
+    "rel" | "rc" | "beta" | "bc" | "main")
+      echo "$1" > "$BRANCH_PATH"
+      exit 0
+      ;;
+    "staging")
+      echo "The staging branch has a high risk of breaking."
+      echo "Do NOT use it unless you know what you are doing."
+      echo "$1" > "$BRANCH_PATH"
+      exit 0
+      ;;
+  esac
+fi
+
+echo "Usage: steamos-select-branch <-c|-l|rel|rc|beta|bc|main>" 1>&2

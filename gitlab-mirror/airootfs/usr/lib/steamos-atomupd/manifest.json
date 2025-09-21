@@ -1,0 +1,10 @@
+{
+  "product": "steamos",
+  "release": "holo",
+  "variant": "steamdeck-oobe",
+  "arch": "amd64",
+  "version": "3.5.7",
+  "buildid": "20231127.10",
+  "checkpoint": false,
+  "estimated_size": 0
+}

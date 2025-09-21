@@ -1,0 +1,209 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-2.0+
+
+# Copyright © 2022 Collabora Ltd
+# Copyright © 2022 Valve Corporation
+
+LIBDIR=$(dirname "$0")
+
+set -eu
+. ${LIBDIR:-.}/steamos-reset.sh
+shopt -s extglob
+
+set +e
+
+declare SCANUUID
+
+parse_args ()
+{
+    for arg in "$@"
+    do
+        case $arg in
+            scanuuid=*)
+                SCANUUID=${arg#*=}
+                ;;
+        esac
+    done
+}
+
+parse_args "$@"
+
+if ! uuid_ok "${SCANUUID:-none}"
+then
+    emit_json_response 400 "Malformed session id '${SCANUUID:-}'"
+    exit 0
+fi
+
+declare -r stype=$(get_data session-type txt $SCANUUID)
+
+if [ "${stype:-none}" != os-status ]
+then
+    emit_json_response 400 "Session $SCANUUID was not an os-status check"
+    exit 0
+fi
+
+atomic_update ()
+{
+    local x;
+    local url="${1:-}"
+    local -r flag=/run/.skip-os-reset
+
+    if [ -f $flag ]
+    then
+        echo "Skipping actual atomic update, in test mode ($flag)" >&2
+        echo "# steamos-atomupd-client --update-from-url \"${url:-}\"" >&2
+        for x in $(seq -f %02.0f 0 20 100);
+        do
+            sleep 1
+            echo "${x}%" >&2
+        done
+        steamos-bootconf set-mode reboot-other
+    else
+        steamos-atomupd-client --update-from-url "${url:-}"        
+    fi
+}
+
+generate_factory_reset_config ()
+{
+    local rv=0
+    local cfg
+
+    (cd $FACTORY_RESET_CONFIG_DIR && rm -vf * >&2)
+
+    # suppress some annoying and unimportant warnings:
+    if ! steamos-factory-reset-config 2>&1
+    then
+         rv=1
+    fi | (grep -vF 'mv: failed to preserve ownership'||true)
+
+    cd $FACTORY_RESET_CONFIG_DIR
+    while read cfg
+    do
+        case $cfg in
+            efi-*) rm "$cfg"; ;;
+            *) log_msg "Configuration for $cfg generated"; ;;
+        esac
+    done < <(ls -1)
+
+    return $rv
+}
+
+update_from_url ()
+{
+    local -r tmpd=$(mktemp -d)
+    local logtxt
+    local lastlog
+
+    if cd $tmpd
+    then
+        while read logtxt
+        do
+            if [ -n "$logtxt" ]; then lastlog="$logtxt"; fi
+
+            case $logtxt in
+                (+([0-9])%) log_msg "New OS image: $logtxt"; ;;
+                *) log_msg "$logtxt"; ;;
+            esac
+        done < <(atomic_update "${url:-}" 2>&1 && touch .ok)
+
+        if [ -e .ok ]
+        then
+            true
+        else
+            log_msg "Update error: $lastlog"
+            false
+        fi
+    fi
+}
+
+check_boot_status ()
+{
+    local -i update=${1:-0}
+    local -r current=$(steamos-bootconf this-image)
+    local -r selected=$(steamos-bootconf selected-image)
+
+    if [ $update -eq 1 ]
+    then
+        if [ -z "${current:-}"  ] ||
+           [ -z "${selected:-}" ] ||
+           [ "$current" = "$selected" ]
+        then
+            log_msg "Bad boot config: current:${current:-?}, next:${selected:-?}"
+            return 1
+        else
+            log_msg "Current image: ${current}; next boot: ${selected}"
+            return 0
+        fi
+    else
+        if [ -z "${current:-}"  ] ||
+           [ -z "${selected:-}" ] ||
+           [ "$current" != "$selected" ]
+        then
+            log_msg "Bad boot config: next:${selected:-?}, should be ${current:-?}"
+            return 1
+        else
+            log_msg "Current image: ${current}; next boot: ${selected}"
+            return 0
+        fi
+    fi
+}
+
+reset_os ()
+{
+    local -i update=${1:-0}
+    local url=${2:-}
+    local cfg
+    
+    if [ $update -eq 0 ]
+    then
+        log_msg "OS image unmodified - update not required"
+    else
+        log_msg "Updating OS image from ${url:-}"
+        if ! update_from_url "${url:-}"
+        then
+            steamos-bootconf set-mode reboot
+            set_session_status 500
+            return 0
+        fi
+    fi
+
+    if check_boot_status ${update}
+    then
+        log_msg "Boot config OK, preparing to reset user data"
+    else
+        log_msg "Boot config not OK: Restoring boot to current image"
+        steamos-bootconf set-mode reboot
+        set_session_status 500
+        return 0        
+    fi
+
+    log_msg "Generating filesystem cleanup config in $FACTORY_RESET_CONFIG_DIR"
+    if ! generate_factory_reset_config
+    then
+        log_msg "Failed to generate reset config"
+        steamos-bootconf set-mode reboot
+        set_session_status 500
+        return 0
+    fi
+
+    log_msg "Factory reset ready"
+    set_session_status 200
+    return 0
+}
+
+log_msg "Factory-Reset $@ started at $(date +%Y-%m-%d\ %H:%M:%S\ %z)"
+
+declare -r atom_url=$(get_data update-target txt $SCANUUID)
+declare -ir need_update=$(get_data update-needed txt $SCANUUID)
+
+set_uuid
+setup_session_dirs
+set_session_type factory-reset
+set_session_status 102
+
+(close_stdio; register_session_pid; reset_os ${need_update:-0} ${atom_url:-}) &
+[ -t 2 ] || disown
+
+emit_json_response 102 "Factory reset started"
+exit 0

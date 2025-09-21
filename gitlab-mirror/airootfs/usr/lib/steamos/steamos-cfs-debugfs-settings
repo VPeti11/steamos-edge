@@ -1,0 +1,41 @@
+#!/bin/bash
+# -*- mode: sh; indent-tabs-mode: nil; sh-basic-offset: 4; -*-
+# vim: et sts=4 sw=4
+
+#  SPDX-License-Identifier: LGPL-2.1+
+#
+#  Copyright © 2022 Valve Corporation.
+#
+#  This file is part of steamos-customizations.
+#
+#  steamos-customizations is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License as
+#  published by the Free Software Foundation; either version 2.1 of the License,
+#  or (at your option) any later version.
+
+#  NOTE: This is just a debugfs settings helper, in order we can apply some
+#  CFS tunings to optimize the scheduler.
+
+set_sched_dbgfs() {
+	if [ ! -f "${DBGMNT}/$1" ]; then
+		IS_ERR=1
+		return
+	fi
+
+	if ! echo "$2" > "${DBGMNT}/$1" 2>/dev/null; then
+		IS_ERR=1
+	fi
+}
+
+IS_ERR=0
+DBGMNT="/sys/kernel/debug/sched"
+
+set_sched_dbgfs "latency_ns" "3000000"
+set_sched_dbgfs "min_granularity_ns" "300000"
+set_sched_dbgfs "wakeup_granularity_ns" "500000"
+set_sched_dbgfs "migration_cost_ns" "50000"
+set_sched_dbgfs "nr_migrate" "128"
+
+if [ "${IS_ERR}" -ne 0 ]; then
+	logger "Not all CFS debugfs settings applied successfuly"
+fi

@@ -1,0 +1,11 @@
+[Unit]
+Description=Update devkit service configuration
+Wants=graphical.target
+After=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/devkit-service-on-os-update
+
+[Install]
+WantedBy=graphical.target

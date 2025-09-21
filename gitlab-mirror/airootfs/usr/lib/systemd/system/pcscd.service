@@ -1,0 +1,12 @@
+[Unit]
+Description=PC/SC Smart Card Daemon
+Requires=pcscd.socket
+Documentation=man:pcscd(8)
+
+[Service]
+ExecStart=/usr/bin/pcscd --foreground --auto-exit $PCSCD_ARGS
+ExecReload=/usr/bin/pcscd --hotplug
+EnvironmentFile=-/etc/default/pcscd
+
+[Install]
+Also=pcscd.socket

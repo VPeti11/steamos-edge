@@ -1,0 +1,109 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-2.0+
+
+# Copyright © 2022 Collabora Ltd
+# Copyright © 2022 Valve Corporation
+
+LIBDIR=$(dirname "$0")
+
+. ${LIBDIR:-.}/steamos-reset.sh
+
+set -u
+
+declare sid=
+declare known_sid=
+declare -i from=0
+declare -i msg_count=0
+declare -i session_pid=0
+
+for arg in "$@"
+do
+    case $arg in
+        uuid=*)
+            sid=${arg#*=}
+            set_uuid "${sid}"
+            ;;
+        start=*)
+            from=${arg#*=}
+            ;;
+        max=*)
+            msg_count=${arg#*=}
+            ;;
+    esac
+done
+
+declare -r sessions=$(list_sessions)
+
+if [ -n "$sid" ]
+then
+    if ! uuid_ok "$sid"
+    then
+       emit_json_response 400 "Malformed session ID '$sid'"
+       exit 0
+    fi
+
+    for known in ${sessions}
+    do
+        if [ "$sid" = "$known" ]
+        then
+            known_sid="$sid"
+            break
+        fi
+    done
+
+    if [ -z "$known_sid" ]
+    then
+        emit_json_response 404 "Session $sid not found"
+        exit 0
+    fi
+
+    set_uuid "$known_sid"
+    status=$(get_session_status)
+    stype=$(quote_escape "$(get_session_type)")
+    lastmsg=$(quote_escape "$(get_log_messages -1 1)")
+    session_pid=$(get_session_pid)
+
+    emit_json_header
+    cat - <<EOF
+{"status": 200,
+ "version": "$VERSION",
+ "message": "OS Reset Session $known_sid",
+ "uuid": "$UUID",
+ "status_list": {"$sid": [$status, "$stype", "$lastmsg", $session_pid]},
+ "log_messages":[
+EOF
+    comma=
+    while read msg
+    do
+        echo ${comma}\"$(quote_escape "$msg")\"
+        comma=,
+    done < <(get_log_messages $from $msg_count)
+    echo "]}"
+    exit 0
+fi
+
+emit_json_header
+cat - <<EOF
+{"status": 200,
+ "version": "$VERSION",
+ "message": "OS Reset Session $known_sid",
+ "status_list":
+EOF
+
+empty=\{
+comma=\{
+while read sid
+do
+    uuid_ok "$sid" || continue
+    status=$(quote_escape "$(get_session_status $sid)")
+    stype=$(quote_escape "$(get_session_type $sid)")
+    message=$(quote_escape "$(get_log_messages -1 1 $sid)")
+    session_pid=$(get_session_pid $sid)
+    echo $comma\"$sid\": "[$status, \"$stype\", \"$message\", $session_pid]"
+    empty=
+    comma=,
+done < <(list_sessions)
+echo -n "$empty"
+echo "}}"
+exit 0

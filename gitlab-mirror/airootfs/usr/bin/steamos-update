@@ -1,0 +1,252 @@
+#!/bin/bash
+
+set -eu
+
+##
+## This script must match the API the temporary Steam UI updater wants of us, including this file
+##
+
+BRANCH_PATH="/var/lib/steamos-branch"
+CI_HOST_PATH="/var/lib/steamos-branch-ci-host"
+CI_KEY_PATH="/var/lib/steamos-branch-ci-key"
+
+# ci builds can bake these in as defaults
+[[ -e $BRANCH_PATH ]] || BRANCH_PATH="/usr/lib/steamos/default-branch"
+[[ -e $CI_HOST_PATH ]] || CI_HOST_PATH="/usr/lib/steamos/default-branch-ci-host"
+[[ -e $CI_KEY_PATH ]] || CI_KEY_PATH="/usr/lib/steamos/default-branch-ci-key"
+
+unset tmpdir
+cleanup() { rm -rf /tmp/steamos-update.pid; [[ -z ${tmpdir-} ]] || rm -rf --one-file-system -- "$tmpdir"; }
+trap cleanup EXIT
+touch /tmp/steamos-update.pid
+
+info() { echo >&2 "$*"; }
+die() { info "!! $*"; exit 1; }
+
+# Please keep these in sync with steamos-customizations pre-install and
+# post-install
+STEAMOS_ATOMUPD_RUNTIME_DIR=/run/steamos-atomupd
+REBOOT_FOR_UPDATE=reboot_for_update
+
+
+checkmode=""
+error=""
+beta=""
+debug=""
+duplicate_detection=""
+
+while [[ $# -ge 1 ]]; do
+  case "$1" in
+    "check") checkmode=1 ;;
+    "--beta") beta=1 ;;
+    "-d") debug=1 ;;
+    "--enable-duplicate-detection") duplicate_detection=1 ;;
+    "--supports-duplicate-detection")
+      info "This script supports the duplicate detection option"
+      exit 0
+    ;;
+    *)
+      error=1
+      info "Unknown option \"$1\""
+    ;;
+  esac
+  shift
+done
+
+if [[ -n $error ]]; then
+  echo >&2 "!! Usage: $0 [check]"
+  exit 1
+fi
+
+atomupd_args=()
+[[ -n $debug ]] && atomupd_args+=(-d)
+
+##
+## CI hook, if this file exists use that CI endpoint
+##
+ci_host=
+if [[ -e $CI_HOST_PATH && -e $CI_KEY_PATH ]]; then
+  ci_host=$(cat -- "$CI_HOST_PATH" || true)
+  ci_key=$(cat -- "$CI_KEY_PATH" || true)
+  [[ $ci_host =~ ^[0-9a-zA-Z]+$ ]] || die "Bad CI branch name"
+  [[ $ci_key =~ ^[0-9a-zA-Z]+$ ]] || die "Bad CI branch name"
+  [[ -n ${tmpdir-} ]] || tmpdir="$(mktemp -d --tmp steamos-update.XXX)" || die "Could not create temporary directory"
+
+  # Make stub netrc and client conf files
+  ci_conf="$tmpdir"/ci_conf.conf
+  cfg=$(sed -r 's/(https:\/\/)([^-/]+)-(images|atomupd)/\1'"$ci_host"'-\3/g' /etc/steamos-atomupd/client.conf)
+  cat <<<"$cfg" >"$ci_conf"
+
+  # Register in netrc.
+  for host in images atomupd packages; do
+    if ! grep -q "^machine $ci_host-$host.steamos.cloud " /root/.netrc 2>/dev/null; then
+      echo "machine $ci_host-$host.steamos.cloud login atomupd-ci-client password $ci_key" >> /root/.netrc
+    fi
+  done
+
+  atomupd_args+=(-d --config "$ci_conf")
+fi
+## End CI hook
+
+# Determine which branches to check.
+check_rel=0
+check_rc=0
+check_beta=0
+check_bc=0
+check_main=0
+check_staging=0
+
+if [[ -n $beta ]]; then
+  info "'--beta' is deprecated; use 'steamos-select-branch beta' then 'steamos-update'"
+  check_beta=1
+else
+  branch=$(cat "$BRANCH_PATH" 2> /dev/null || echo "rel")
+  case "$branch" in
+    "rel")
+      check_rel=1
+      ;;
+    "rc")
+      check_rel=1
+      check_rc=1
+      ;;
+    "beta")
+      check_beta=1
+      ;;
+    "bc")
+      check_beta=1
+      check_bc=1
+      ;;
+    "main")
+      check_main=1
+      ;;
+    "staging")
+      check_staging=1
+      ;;
+    *)
+      if [[ -z $ci_host ]]; then # CI branches are arbitrary
+        echo "unknown branch name in $BRANCH_PATH: $branch" 1>&2
+        exit 1
+      fi
+      ;;
+  esac
+fi
+
+# Get the buildid for each variant.
+get_buildid () {
+  if [[ $1 = 0 ]]; then
+    exit 0
+  fi
+
+  query="$(sudo steamos-atomupd-client "${atomupd_args[@]}" --variant="$2" --query-only)"
+  # If there is an update candidate, `query` will hold the update JSON.
+  # If there isn't an update, `query` will be empty.
+  # Finally, a non-zero return code means that an error occurred.
+  if [[ $? != 0 ]]; then
+    info "Failed to check for updates"
+    exit 1 # Unknown failure
+  fi
+
+  jq -r '.minor.candidates[0].image.buildid | select(type == "string")' <<< "$query"
+}
+
+buildid_ci=
+if [[ -n $ci_host ]]; then
+  buildid_ci="$(get_buildid 1 steamdeck-"$branch")"
+fi
+
+buildid_rel="$(get_buildid $check_rel steamdeck)"
+buildid_rc="$(get_buildid $check_rc steamdeck-rc)"
+buildid_beta="$(get_buildid $check_beta steamdeck-beta)"
+buildid_bc="$(get_buildid $check_bc steamdeck-bc)"
+buildid_main="$(get_buildid $check_main steamdeck-main)"
+buildid_staging="$(get_buildid $check_staging steamdeck-staging)"
+
+if [[ -n $debug ]]; then
+  info "buildid_rel=$buildid_rel"
+  info "buildid_rc=$buildid_rc"
+  info "buildid_beta=$buildid_beta"
+  info "buildid_bc=$buildid_bc"
+  info "buildid_main=$buildid_main"
+
+  [[ -n $ci_host ]] && info "buildid_ci=$buildid_ci"
+fi
+
+# Choose the variant with the newest buildid.
+chosen_buildid=""
+chosen_variant=""
+
+if [[ "$buildid_rel" > "$chosen_buildid" ]]; then
+  chosen_buildid="$buildid_rel"
+  chosen_variant="steamdeck"
+fi
+if [[ "$buildid_rc" > "$chosen_buildid" ]]; then
+  chosen_buildid="$buildid_rc"
+  chosen_variant="steamdeck-rc"
+fi
+if [[ "$buildid_beta" > "$chosen_buildid" ]]; then
+  chosen_buildid="$buildid_beta"
+  chosen_variant="steamdeck-beta"
+fi
+if [[ "$buildid_bc" > "$chosen_buildid" ]]; then
+  chosen_buildid="$buildid_bc"
+  chosen_variant="steamdeck-bc"
+fi
+if [[ "$buildid_main" > "$chosen_buildid" ]]; then
+  chosen_buildid="$buildid_main"
+  chosen_variant="steamdeck-main"
+fi
+if [[ "$buildid_staging" > "$chosen_buildid" ]]; then
+  chosen_buildid="$buildid_staging"
+  chosen_variant="steamdeck-staging"
+fi
+if [[ "$buildid_ci" > "$chosen_buildid" ]]; then
+  chosen_buildid="$buildid_ci"
+  chosen_variant="steamdeck-$branch"
+fi
+
+if [[ -z "$chosen_variant" ]]; then
+  info "No update available"
+  exit 7
+fi
+
+manifest_path="/etc/steamos-atomupd/manifest.json"
+current_buildid=$(jq -r .buildid < "$manifest_path")
+if [[ "$current_buildid" = "$chosen_buildid" ]]; then
+  info "No update available"
+  exit 7
+fi
+
+# Do this check only if explicitly enabled to avoid returning a new exit code
+# that the Steam client doesn't support yet
+if [[ -f "$STEAMOS_ATOMUPD_RUNTIME_DIR/$REBOOT_FOR_UPDATE" && -n $duplicate_detection ]]; then
+  installed_buildid=$(< "$STEAMOS_ATOMUPD_RUNTIME_DIR/$REBOOT_FOR_UPDATE")
+  if [[ "$installed_buildid" = "$chosen_buildid" ]]; then
+    info "Update $chosen_buildid has already been applied, please reboot to enable it"
+    exit 8
+  fi
+fi
+
+if [[ -n $debug ]]; then
+  info "chosen_buildid=$chosen_buildid"
+  info "chosen_variant=$chosen_variant"
+fi
+
+# Update is available
+info "Update available"
+
+# Check mode, return success for update available
+if [[ -n ${checkmode-} ]]; then
+  echo "$chosen_buildid"
+  exit 0
+fi
+
+# Not check mode. Update!
+do_atomupd() { sudo steamos-atomupd-client "${atomupd_args[@]}" --variant="$chosen_variant" "$@"; }
+
+if do_atomupd; then
+  info "Applied an update"
+  exit 0
+else
+  info "Update failed"
+  exit 1
+fi

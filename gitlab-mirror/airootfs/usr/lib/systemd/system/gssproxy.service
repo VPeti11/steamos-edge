@@ -1,0 +1,17 @@
+[Unit]
+Description=GSSAPI Proxy Daemon
+After=network.target
+Before=rpc-gssd.service
+
+[Service]
+StateDirectory=gssproxy/clients gssproxy/rcache
+Environment=KRB5RCACHEDIR=/var/lib/gssproxy/rcache
+ExecStart=/usr/bin/gssproxy -D
+# These two should be used with traditional UNIX forking daemons
+# consult systemd.service(5) for more details
+Type=forking
+PIDFile=/run/gssproxy.pid
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target

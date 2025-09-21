@@ -1,0 +1,14 @@
+#  SPDX-License-Identifier: LGPL-2.1-or-later
+#
+#  Copyright (c) 2022-2023 Valve Software
+#  Author: Vicki Pfau <vi@endrift.com>
+
+[Unit]
+Description=SteamOS log submitter service - sends error logs to Valve
+
+[Service]
+User=steamos-log-submitter
+ExecStart=/usr/bin/python -m steamos_log_submitter.daemon
+
+[Install]
+WantedBy=multi-user.target
