@@ -42,8 +42,9 @@ jobs:
         else
           git checkout -b main
         fi
-    
-        find . -mindepth 1 ! -name ".*" -exec rm -rf {} + 2>/dev/null || true
+
+        shopt -s extglob
+        rm -rf !(.git)
     
         # Go back and copy all safe folders into GitLab repo
         cd ..
