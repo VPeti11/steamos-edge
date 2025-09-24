@@ -1,7 +1,0 @@
-[Unit]
-Description=Atomic Update Daemon
-
-[Service]
-Type=dbus
-BusName=com.steampowered.Atomupd1
-ExecStart=/usr/lib/atomupd-daemon
