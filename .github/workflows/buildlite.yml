@@ -1,8 +1,6 @@
 name: Build SteamOS Edge ISO Lite
 
 on:
-  schedule:
-    - cron: "0 7 * * 5"
   workflow_dispatch:
 
 permissions:
